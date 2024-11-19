@@ -95,7 +95,7 @@ def merge_and_download(file_id) -> Response | tuple[str, int]:
         )
 
         original_name = os.path.splitext(input_file["original_name"])[0]
-        safe_filename: str = secure_filename(f"{original_name}.csv")
+        safe_filename: str = secure_filename(f"{original_name}")
 
         response: Response = make_response(merged_content)
         response.headers['Content-Disposition'] = f'attachment; filename={safe_filename}.csv'
