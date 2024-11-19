@@ -1,18 +1,18 @@
 import os
-from typing import Tuple
-
 from flask import Blueprint, render_template, request, flash, make_response, session, Response
 from flask.sessions import SessionMixin
 from pandas import DataFrame
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest
+from werkzeug.utils import secure_filename
+
 from app.services.file_service import FileService
 from app.services.merge_service import MergeService
 from app.services.directory_service import DirectoryService
 from app.utils.constants import (
     ERROR, MSG_MISSING_FILES, MSG_INVALID_GUIDELINE,
-    MSG_SESSION_EXPIRED, MSG_FILE_NOT_FOUND, CSV_CONTENT_TYPE, INPUT_FILE, GUIDELINE_FILE, SESSION_GUIDELINE_PATH,
-    SESSION_SAVED_PATH
+    MSG_SESSION_EXPIRED, MSG_FILE_NOT_FOUND, CSV_CONTENT_TYPE,
+    INPUT_FILE, GUIDELINE_FILE, SESSION_GUIDELINE_PATH, SESSION_SAVED_PATH
 )
 
 main: Blueprint = Blueprint('main', __name__)
@@ -95,10 +95,15 @@ def merge_and_download(file_id) -> Response | tuple[str, int]:
         )
 
         original_name = os.path.splitext(input_file["original_name"])[0]
+        safe_filename: str = secure_filename(f"{original_name}.csv")
 
         response: Response = make_response(merged_content)
-        response.headers['Content-Disposition'] = f'attachment; filename={original_name}.csv'
+        response.headers['Content-Disposition'] = f'attachment; filename={safe_filename}.csv'
         response.headers['Content-Type'] = CSV_CONTENT_TYPE
+        # Add header to prevent caching
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
 
         return response
 

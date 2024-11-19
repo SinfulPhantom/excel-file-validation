@@ -51,42 +51,54 @@
 </div>
 
 <script>
-document.querySelectorAll('.merge-btn').forEach(button => {
-    button.addEventListener('click', async function() {
-        const fileId = this.dataset.fileId;
-        const filename = this.dataset.filename;
-        const spinner = this.querySelector('.spinner-border');
+    document.querySelectorAll('.merge-btn').forEach(button => {
+        button.addEventListener('click', async function() {
+            const fileId = this.dataset.fileId;
+            const spinner = this.querySelector('.spinner-border');
 
-        this.disabled = true;
-        spinner.classList.remove('d-none');
+            this.disabled = true;
+            spinner.classList.remove('d-none');
 
-        try {
-            const response = await fetch(`/merge_and_download/${fileId}`, {
-                method: 'GET'
-            });
+            try {
+                const response = await fetch(`/merge_and_download/${fileId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/csv'
+                    }
+                });
 
-            if (!response.ok) throw new Error('Merge failed');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
+                // Get the filename from the Content-Disposition header
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'merged.csv';
+                if (contentDisposition) {
+                    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                    if (matches != null && matches[1]) {
+                        filename = matches[1].replace(/['"]/g, '');
+                    }
+                }
 
-            // Get the filename without extension and add .csv
-            const originalName = filename.substring(0, filename.lastIndexOf('.'));
-            a.download = `${originalName}.csv`;
-
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            a.remove();
-        } catch (error) {
-            alert('Error during merge: ' + error.message);
-        } finally {
-            this.disabled = false;
-            spinner.classList.add('d-none');
-        }
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`Error during merge: ${error.message}`);
+            } finally {
+                this.disabled = false;
+                spinner.classList.add('d-none');
+            }
+        });
     });
-});
-</script>
+    </script>
+</div>
 {% endblock %}

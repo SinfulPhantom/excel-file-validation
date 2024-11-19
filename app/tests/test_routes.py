@@ -6,6 +6,7 @@ import pandas as pd
 from flask import Response
 from pandas import DataFrame
 from io import BytesIO
+from bs4 import BeautifulSoup
 from app.utils.constants import (
     UPLOAD_FOLDER, TEMP_FOLDER, MAX_FILE_SIZE_BYTES,
     MSG_MISSING_FILES, MSG_INVALID_GUIDELINE, GUIDELINE_FILENAME,
@@ -81,19 +82,58 @@ class TestRoutes:
 
         assert response.status_code == 413
 
-    def test_successful_upload_and_merge(self, client) -> None:
-        data: Dict = setup_test_file_data()
-        response: Response = client.post('/', data=data, content_type=FORM_DATA_TYPE)
+    def test_successful_upload_and_merge(self, client):
+        # Create test files
+        guideline_data = pd.DataFrame({
+            'Name': ['John'],
+            'Age': [30],
+            'Location': ['NY']
+        })
+        input_data = pd.DataFrame({
+            'Name': ['John'],
+            'Age': [30]
+        })
+
+        # Prepare the files
+        guideline_buffer = BytesIO()
+        guideline_data.to_csv(guideline_buffer, index=False)
+        guideline_buffer.seek(0)
+
+        input_buffer = create_test_excel(input_data)
+
+        # Upload files
+        data = {
+            'guideline_file': (guideline_buffer, 'guideline.csv'),
+            'input_files': (input_buffer, 'test.xlsx')
+        }
+
+        response = client.post('/', data=data, content_type='multipart/form-data')
         assert response.status_code == 200
 
-        match = re.search(r'data-file-id="([^"]+)"', response.data.decode())
-        assert match is not None
+        # Parse the HTML response
+        soup = BeautifulSoup(response.data, 'html.parser')
+        merge_button = soup.find('button', {'class': 'merge-btn'})
+        assert merge_button is not None
 
-        file_id: str = match.group(1)
-        response: Response = client.get(f'/merge_and_download/{file_id}')
+        file_id = merge_button.get('data-file-id')
+        assert file_id is not None
+
+        # Test merge and download
+        response = client.get(f'/merge_and_download/{file_id}')
         assert response.status_code == 200
-        assert response.headers['Content-Type'] == CSV_CONTENT_TYPE
-        assert f'filename={TEST_FORMAT_CSV}' in response.headers['Content-Disposition']
+        assert response.headers['Content-Type'] == 'text/csv'
+
+        # Verify Content-Disposition header
+        content_disposition = response.headers['Content-Disposition']
+        assert 'attachment' in content_disposition
+        assert f'filename={TEST_FORMAT_CSV}' in content_disposition
+
+        # Verify the content of the merged file
+        result_df = pd.read_csv(BytesIO(response.data))
+        assert all(col in result_df.columns for col in ['Name', 'Age', 'Location'])
+        assert result_df['Name'].iloc[0] == 'John'
+        assert result_df['Age'].iloc[0] == 30
+        assert pd.isna(result_df['Location'].iloc[0])
 
     def test_merge_invalid_session(self, client) -> None:
         with client.session_transaction() as session:
