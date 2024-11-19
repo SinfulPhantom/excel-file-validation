@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-center min-vh-100">
+    <div class="card w-75">
+        <div class="card-header bg-primary text-white">
+            <h2 class="mb-0">File Validator</h2>
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" id="uploadForm">
+                <div class="mb-4">
+                    <label for="input_files" class="form-label fw-bold">Input Files (Excel)</label>
+                    <input type="file" class="form-control" id="input_files" name="input_files" accept=".xlsx,.xls" multiple required>
+                </div>
+                <div class="mb-4">
+                    <label for="guideline_file" class="form-label fw-bold">Guideline File (CSV)</label>
+                    <input type="file" class="form-control" id="guideline_file" name="guideline_file" accept=".csv" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100" id="submitBtn">
+                    <span class="spinner-border spinner-border-sm d-none me-2" role="status" aria-hidden="true"></span>
+                    Upload and Validate
+                </button>
+            </form>
+            <div class="progress mt-3 d-none" id="progressBar">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    const button = document.getElementById('submitBtn');
+    const spinner = button.querySelector('.spinner-border');
+    const progressBar = document.getElementById('progressBar');
+    const progressBarInner = progressBar.querySelector('.progress-bar');
+
+    button.disabled = true;
+    spinner.classList.remove('d-none');
+    progressBar.classList.remove('d-none');
+
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += 5;
+        if (progress <= 90) {
+            progressBarInner.style.width = progress + '%';
+            progressBarInner.setAttribute('aria-valuenow', progress);
+        }
+    }, 100);
+});
+</script>
+{% endblock %}
