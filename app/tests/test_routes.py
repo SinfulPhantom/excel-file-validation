@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import pandas as pd
 from io import BytesIO
@@ -98,7 +100,6 @@ def test_merge_and_download(client, cleanup):
 
     assert response.status_code == 200
 
-    # Extract file_id from response
     import re
     match = re.search(r'data-file-id="([^"]+)"', response.data.decode())
     assert match is not None
@@ -107,7 +108,7 @@ def test_merge_and_download(client, cleanup):
     response = client.get(f'/merge_and_download/{file_id}')
     assert response.status_code == 200
     assert response.headers['Content-Type'] == 'text/csv'
-    assert 'merged_test.xlsx' in response.headers['Content-Disposition']
+    assert 'filename=test.csv' in response.headers['Content-Disposition']
 
 
 def test_merge_missing_files(client, cleanup):
@@ -129,3 +130,50 @@ def test_merge_invalid_file_id(client, cleanup):
 
     response = client.get('/merge_and_download/invalid-id')
     assert response.status_code == 400
+
+
+@pytest.fixture
+def clean_directories():
+    """Fixture to clean up directories before and after tests"""
+    import shutil
+    from app.routes import UPLOAD_FOLDER
+
+    # Clean before test
+    for directory in [UPLOAD_FOLDER, 'app/temp']:
+        if os.path.exists(directory):
+            shutil.rmtree(directory)
+
+    yield
+
+    # Clean after test
+    for directory in [UPLOAD_FOLDER, 'app/temp']:
+        if os.path.exists(directory):
+            shutil.rmtree(directory)
+
+
+def test_directory_creation(client, clean_directories):
+    from app.routes import UPLOAD_FOLDER
+
+    # Verify directories don't exist initially
+    assert not os.path.exists(UPLOAD_FOLDER)
+    assert not os.path.exists('app/temp')
+
+    # Access route and verify response
+    response = client.get('/')
+    assert response.status_code == 200
+
+    # Verify directories were created
+    assert os.path.exists(UPLOAD_FOLDER)
+    assert os.path.exists('app/temp')
+    assert os.path.isdir(UPLOAD_FOLDER)
+    assert os.path.isdir('app/temp')
+
+    # Verify directories are writable
+    test_file_path = os.path.join(UPLOAD_FOLDER, 'test.txt')
+    try:
+        with open(test_file_path, 'w') as f:
+            f.write('test')
+        assert os.path.exists(test_file_path)
+    finally:
+        if os.path.exists(test_file_path):
+            os.remove(test_file_path)

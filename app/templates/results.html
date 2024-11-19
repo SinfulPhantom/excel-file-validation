@@ -36,7 +36,9 @@
             </div>
             {% if result.missing_headers %}
             <div class="mt-3">
-                <button class="btn btn-success merge-btn" data-file-id="{{ result.file_id }}">
+                <button class="btn btn-success merge-btn"
+                        data-file-id="{{ result.file_id }}"
+                        data-filename="{{ result.filename }}">
                     <span class="spinner-border spinner-border-sm d-none me-2" role="status"></span>
                     Merge and Download
                 </button>
@@ -49,11 +51,11 @@
 </div>
 
 <script>
-document.querySelectorAll('.merge-btn').forEach(btn => {
-    btn.addEventListener('click', async function(e) {
-        e.preventDefault();
-        const spinner = this.querySelector('.spinner-border');
+document.querySelectorAll('.merge-btn').forEach(button => {
+    button.addEventListener('click', async function() {
         const fileId = this.dataset.fileId;
+        const filename = this.dataset.filename;
+        const spinner = this.querySelector('.spinner-border');
 
         this.disabled = true;
         spinner.classList.remove('d-none');
@@ -63,13 +65,17 @@ document.querySelectorAll('.merge-btn').forEach(btn => {
                 method: 'GET'
             });
 
-            if (!response.ok) throw new Error('Download failed');
+            if (!response.ok) throw new Error('Merge failed');
 
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `merged_file_${fileId}.csv`;
+
+            // Get the filename without extension and add .csv
+            const originalName = filename.substring(0, filename.lastIndexOf('.'));
+            a.download = `${originalName}.csv`;
+
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);

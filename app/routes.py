@@ -30,8 +30,18 @@ def save_uploaded_file(file, prefix=''):
     return filepath
 
 
+def ensure_upload_dirs():
+    """Ensure all required directories exist"""
+    dirs = [UPLOAD_FOLDER, 'app/temp']
+    for dir in dirs:
+        os.makedirs(dir, exist_ok=True)
+
+# Initialize required directories when the module loads
+ensure_upload_dirs()
+
 @main.route('/', methods=['GET', 'POST'])
 def upload_file():
+    ensure_upload_dirs()  # Check directories exist before each upload
     if request.method == 'POST':
         if 'guideline_file' not in request.files or 'input_files' not in request.files:
             flash('Missing files', 'error')
@@ -102,7 +112,6 @@ def merge_and_download(file_id):
         if 'guideline_path' not in session or 'saved_files' not in session:
             raise BadRequest('Session expired')
 
-        # Find the correct input file
         input_file = next(
             (f for f in session['saved_files'] if f['id'] == file_id),
             None
@@ -125,8 +134,11 @@ def merge_and_download(file_id):
         input_df.to_csv(output, index=False)
         output.seek(0)
 
+        # Get original filename without extension and add .csv
+        original_name = os.path.splitext(input_file["original_name"])[0]
+
         response = make_response(output.getvalue())
-        response.headers['Content-Disposition'] = f'attachment; filename=merged_{input_file["original_name"]}.csv'
+        response.headers['Content-Disposition'] = f'attachment; filename={original_name}.csv'
         response.headers['Content-Type'] = 'text/csv'
 
         return response
@@ -135,7 +147,6 @@ def merge_and_download(file_id):
         return str(e), 400
 
     finally:
-        # Cleanup files if session is expired
         if 'saved_files' not in session:
             cleanup_files()
 
