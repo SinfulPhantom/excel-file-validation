@@ -1,11 +1,15 @@
-from flask import Blueprint, render_template, request, flash
-from werkzeug.datastructures import FileStorage
+from flask import Blueprint, render_template, request, flash, make_response, session
 from werkzeug.utils import secure_filename
 import pandas as pd
 import os
+import io
+import uuid
+from werkzeug.exceptions import BadRequest
 
 main = Blueprint('main', __name__)
 
+UPLOAD_FOLDER = 'app/uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_INPUT_EXTENSIONS = {'xlsx', 'xls'}
 ALLOWED_GUIDELINE_EXTENSION = {'csv'}
 UPLOAD_FOLDER = 'app/uploads'
@@ -15,72 +19,130 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def allowed_input_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_INPUT_EXTENSIONS
 
-
 def allowed_guideline_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_GUIDELINE_EXTENSION
+
+
+def save_uploaded_file(file, prefix=''):
+    filename = secure_filename(f"{prefix}_{file.filename}")
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+    return filepath
 
 
 @main.route('/', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
-        if 'guideline_file' not in request.files:
-            flash('No guideline file selected', 'error')
+        if 'guideline_file' not in request.files or 'input_files' not in request.files:
+            flash('Missing files', 'error')
             return render_template('upload.html')
 
-        if 'input_files' not in request.files:
-            flash('No input files selected', 'error')
-            return render_template('upload.html')
-
-        guideline_file: FileStorage = request.files['guideline_file']
+        guideline_file = request.files['guideline_file']
         input_files = request.files.getlist('input_files')
 
         if guideline_file.filename == '':
-            flash('No guideline file selected', 'error')
-            return render_template('upload.html')
-
-        if not any(file.filename != '' for file in input_files):
-            flash('No input files selected', 'error')
+            flash('Missing files', 'error')
             return render_template('upload.html')
 
         if not allowed_guideline_file(guideline_file.filename):
-            flash('Guideline file must be CSV format', 'error')
+            flash('Invalid guideline format', 'error')
             return render_template('upload.html')
 
+        # Save guideline file
+        session_id = str(uuid.uuid4())
+        guideline_path = save_uploaded_file(guideline_file, session_id)
+
+        try:
+            # Validate guideline file is actually a CSV
+            pd.read_csv(guideline_path)
+        except Exception:
+            os.remove(guideline_path)
+            flash('Invalid guideline format', 'error')
+            return render_template('upload.html')
+
+        # Process each input file
         results = []
-        guideline_df = pd.read_csv(guideline_file)
+        saved_files = []
+        guideline_df = pd.read_csv(guideline_path)
         guideline_headers = set(guideline_df.columns)
 
-        for input_file in input_files:
-            if input_file.filename != '' and allowed_input_file(input_file.filename):
-                filename = secure_filename(input_file.filename)
-                filepath = os.path.join(UPLOAD_FOLDER, filename)
-                input_file.save(filepath)
+        for file in input_files:
+            if file and allowed_input_file(file.filename):
+                file_id = str(uuid.uuid4())
+                filepath = save_uploaded_file(file, file_id)
 
-                try:
-                    # Explicitly specify engine based on file extension
-                    if filename.endswith('.xlsx'):
-                        input_df = pd.read_excel(filepath, engine='openpyxl')
-                    else:
-                        input_df = pd.read_excel(filepath, engine='xlrd')
+                input_df = pd.read_excel(filepath, engine='openpyxl')
+                input_headers = set(input_df.columns)
 
-                    input_headers = set(input_df.columns)
+                results.append({
+                    'filename': file.filename,
+                    'file_id': file_id,
+                    'missing_headers': sorted(list(guideline_headers - input_headers)),
+                    'extra_headers': sorted(list(input_headers - guideline_headers))
+                })
 
-                    missing_in_input = guideline_headers - input_headers
-                    extra_in_input = input_headers - guideline_headers
+                saved_files.append({
+                    'id': file_id,
+                    'path': filepath,
+                    'original_name': file.filename
+                })
 
-                    results.append({
-                        'filename': filename,
-                        'missing_headers': sorted(list(missing_in_input)),
-                        'extra_headers': sorted(list(extra_in_input))
-                    })
-                except Exception as e:
-                    flash(f'Error processing {filename}: {str(e)}', 'error')
-                finally:
-                    if os.path.exists(filepath):
-                        os.remove(filepath)
-            else:
-                flash(f'Invalid input file format: {input_file.filename}', 'error')
+        # Store paths in session
+        session['guideline_path'] = guideline_path
+        session['saved_files'] = saved_files
 
         return render_template('results.html', results=results)
 
     return render_template('upload.html')
+
+
+@main.route('/merge_and_download/<file_id>')
+def merge_and_download(file_id):
+    try:
+        if 'guideline_path' not in session or 'saved_files' not in session:
+            raise BadRequest('Session expired')
+
+        # Find the correct input file
+        input_file = next(
+            (f for f in session['saved_files'] if f['id'] == file_id),
+            None
+        )
+
+        if not input_file:
+            raise BadRequest('File not found')
+
+        # Read files
+        guideline_df = pd.read_csv(session['guideline_path'])
+        input_df = pd.read_excel(input_file['path'], engine='openpyxl')
+
+        # Add missing columns
+        missing_columns = set(guideline_df.columns) - set(input_df.columns)
+        for column in missing_columns:
+            input_df[column] = pd.NA
+
+        # Create output
+        output = io.StringIO()
+        input_df.to_csv(output, index=False)
+        output.seek(0)
+
+        response = make_response(output.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename=merged_{input_file["original_name"]}.csv'
+        response.headers['Content-Type'] = 'text/csv'
+
+        return response
+
+    except Exception as e:
+        return str(e), 400
+
+    finally:
+        # Cleanup files if session is expired
+        if 'saved_files' not in session:
+            cleanup_files()
+
+
+def cleanup_files():
+    for file in os.listdir(UPLOAD_FOLDER):
+        try:
+            os.remove(os.path.join(UPLOAD_FOLDER, file))
+        except:
+            pass
