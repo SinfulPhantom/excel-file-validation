@@ -1,159 +1,106 @@
-from flask import Blueprint, render_template, request, flash, make_response, session
-from werkzeug.utils import secure_filename
-import pandas as pd
 import os
-import io
-import uuid
+from typing import Tuple
+
+from flask import Blueprint, render_template, request, flash, make_response, session, Response
+from flask.sessions import SessionMixin
+from pandas import DataFrame
+from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest
+from app.services.file_service import FileService
+from app.services.merge_service import MergeService
+from app.services.directory_service import DirectoryService
+from app.utils.constants import (
+    ERROR, MSG_MISSING_FILES, MSG_INVALID_GUIDELINE,
+    MSG_SESSION_EXPIRED, MSG_FILE_NOT_FOUND, CSV_CONTENT_TYPE, INPUT_FILE, GUIDELINE_FILE, SESSION_GUIDELINE_PATH,
+    SESSION_SAVED_PATH
+)
 
-main = Blueprint('main', __name__)
+main: Blueprint = Blueprint('main', __name__)
 
-UPLOAD_FOLDER = 'app/uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-ALLOWED_INPUT_EXTENSIONS = {'xlsx', 'xls'}
-ALLOWED_GUIDELINE_EXTENSION = {'csv'}
-UPLOAD_FOLDER = 'app/uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-
-def allowed_input_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_INPUT_EXTENSIONS
-
-def allowed_guideline_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_GUIDELINE_EXTENSION
-
-
-def save_uploaded_file(file, prefix=''):
-    filename = secure_filename(f"{prefix}_{file.filename}")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(filepath)
-    return filepath
-
-
-def ensure_upload_dirs():
-    """Ensure all required directories exist"""
-    dirs = [UPLOAD_FOLDER, 'app/temp']
-    for dir in dirs:
-        os.makedirs(dir, exist_ok=True)
-
-# Initialize required directories when the module loads
-ensure_upload_dirs()
 
 @main.route('/', methods=['GET', 'POST'])
-def upload_file():
-    ensure_upload_dirs()  # Check directories exist before each upload
+def upload_file() -> str:
+    DirectoryService.ensure_upload_dirs()
+
     if request.method == 'POST':
-        if 'guideline_file' not in request.files or 'input_files' not in request.files:
-            flash('Missing files', 'error')
+        if GUIDELINE_FILE not in request.files or INPUT_FILE not in request.files:
+            flash(MSG_MISSING_FILES, ERROR)
             return render_template('upload.html')
 
-        guideline_file = request.files['guideline_file']
-        input_files = request.files.getlist('input_files')
+        guideline_file: FileStorage = request.files[GUIDELINE_FILE]
+        input_files: list[FileStorage] = request.files.getlist(INPUT_FILE)
 
-        if guideline_file.filename == '':
-            flash('Missing files', 'error')
+        if guideline_file.filename == '' or not FileService.allowed_guideline_file(guideline_file.filename):
+            flash(MSG_INVALID_GUIDELINE, ERROR)
             return render_template('upload.html')
-
-        if not allowed_guideline_file(guideline_file.filename):
-            flash('Invalid guideline format', 'error')
-            return render_template('upload.html')
-
-        # Save guideline file
-        session_id = str(uuid.uuid4())
-        guideline_path = save_uploaded_file(guideline_file, session_id)
 
         try:
-            # Validate guideline file is actually a CSV
-            pd.read_csv(guideline_path)
+            guideline_path, session_id = FileService.save_guideline_file(guideline_file)
+            guideline_df: DataFrame = FileService.process_guideline_file(guideline_path)
         except Exception:
-            os.remove(guideline_path)
-            flash('Invalid guideline format', 'error')
+            FileService.cleanup_file(guideline_path)
+            flash(MSG_INVALID_GUIDELINE, ERROR)
             return render_template('upload.html')
 
-        # Process each input file
-        results = []
-        saved_files = []
-        guideline_df = pd.read_csv(guideline_path)
-        guideline_headers = set(guideline_df.columns)
+        results: list = []
+        saved_files: list = []
 
         for file in input_files:
-            if file and allowed_input_file(file.filename):
-                file_id = str(uuid.uuid4())
-                filepath = save_uploaded_file(file, file_id)
+            if file and FileService.allowed_input_file(file.filename):
+                try:
+                    filepath, file_id = FileService.save_input_file(file)
+                    input_df: DataFrame = FileService.process_input_file(filepath)
 
-                input_df = pd.read_excel(filepath, engine='openpyxl')
-                input_headers = set(input_df.columns)
+                    header_comparison: dict = MergeService.compare_headers(guideline_df, input_df)
 
-                results.append({
-                    'filename': file.filename,
-                    'file_id': file_id,
-                    'missing_headers': sorted(list(guideline_headers - input_headers)),
-                    'extra_headers': sorted(list(input_headers - guideline_headers))
-                })
+                    results.append({
+                        'filename': file.filename,
+                        'file_id': file_id,
+                        **header_comparison
+                    })
 
-                saved_files.append({
-                    'id': file_id,
-                    'path': filepath,
-                    'original_name': file.filename
-                })
+                    saved_files.append({
+                        'id': file_id,
+                        'path': filepath,
+                        'original_name': file.filename
+                    })
+                except Exception as e:
+                    flash(f'Error processing {file.filename}: {str(e)}', ERROR)
+                    FileService.cleanup_file(filepath)
 
-        # Store paths in session
-        session['guideline_path'] = guideline_path
-        session['saved_files'] = saved_files
-
+        session[SESSION_GUIDELINE_PATH]: SessionMixin[str] = guideline_path
+        session[SESSION_SAVED_PATH] = saved_files
         return render_template('results.html', results=results)
 
     return render_template('upload.html')
 
 
 @main.route('/merge_and_download/<file_id>')
-def merge_and_download(file_id):
+def merge_and_download(file_id) -> Response | tuple[str, int]:
     try:
-        if 'guideline_path' not in session or 'saved_files' not in session:
-            raise BadRequest('Session expired')
+        if SESSION_GUIDELINE_PATH not in session or SESSION_SAVED_PATH not in session:
+            raise BadRequest(MSG_SESSION_EXPIRED)
 
         input_file = next(
-            (f for f in session['saved_files'] if f['id'] == file_id),
+            (f for f in session[SESSION_SAVED_PATH] if f['id'] == file_id),
             None
         )
 
         if not input_file:
-            raise BadRequest('File not found')
+            raise BadRequest(MSG_FILE_NOT_FOUND)
 
-        # Read files
-        guideline_df = pd.read_csv(session['guideline_path'])
-        input_df = pd.read_excel(input_file['path'], engine='openpyxl')
+        merged_content: str = MergeService.merge_files(
+            session[SESSION_GUIDELINE_PATH],
+            input_file['path']
+        )
 
-        # Add missing columns
-        missing_columns = set(guideline_df.columns) - set(input_df.columns)
-        for column in missing_columns:
-            input_df[column] = pd.NA
-
-        # Create output
-        output = io.StringIO()
-        input_df.to_csv(output, index=False)
-        output.seek(0)
-
-        # Get original filename without extension and add .csv
         original_name = os.path.splitext(input_file["original_name"])[0]
 
-        response = make_response(output.getvalue())
+        response: Response = make_response(merged_content)
         response.headers['Content-Disposition'] = f'attachment; filename={original_name}.csv'
-        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Type'] = CSV_CONTENT_TYPE
 
         return response
 
     except Exception as e:
         return str(e), 400
-
-    finally:
-        if 'saved_files' not in session:
-            cleanup_files()
-
-
-def cleanup_files():
-    for file in os.listdir(UPLOAD_FOLDER):
-        try:
-            os.remove(os.path.join(UPLOAD_FOLDER, file))
-        except:
-            pass
