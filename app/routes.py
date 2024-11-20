@@ -2,7 +2,6 @@ import os
 from typing import Dict
 
 from flask import Blueprint, render_template, request, flash, make_response, session, Response
-from flask.sessions import SessionMixin
 from pandas import DataFrame
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest
