@@ -74,8 +74,17 @@ BASE_TEST_DATA_EMAIL: Dict = {
     'Email': []
 }
 
-HEADER_CONVERSIONS = {
+# Mapping
+HEADER_CONVERSIONS: Dict = {
     "Consumer": "Source",
+    "Consuming": "Source",
     "Provider": "Destination",
+    "Providing": "Destination",
     "Services": "Ports"
+}
+ABBREVIATIONS_MAP: Dict = {
+    'app': 'Application',
+    'env': 'Environment',
+    'loc': 'Location',
+    'ost': 'OperatingSystem'
 }

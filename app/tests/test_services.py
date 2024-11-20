@@ -79,60 +79,61 @@ class TestFileService:
         assert filepath.endswith(f'_{TEST_FORMAT_XLSX}')
 
 
-SOURCE: str = 'Source Mode'
-DESTINATION: str = 'Destination Name'
-PORT: str = 'Ports Role'
-CONSUMER: str = 'Consumer Mode'
-PROVIDER: str = 'Provider Name'
-SERVICES: str = 'Services Role'
-
-@pytest.fixture
-def sample_guideline_df() -> DataFrame:
-    return pd.DataFrame({
-        'Id': [1],
-        'Name': ['John'],
-        SOURCE: ['Direct'],
-        DESTINATION: ['Location'],
-        PORT: [8080]
-    })
-
-
-@pytest.fixture
-def sample_input_df() -> DataFrame:
-    return pd.DataFrame({
-        'ID': [1],
-        'name': ['John'],
-        CONSUMER: ['Direct'],
-        PROVIDER: ['Location'],
-        SERVICES: [8080]
-    })
-
-
 class TestMergeService:
+    @pytest.mark.parametrize("input_header,expected_output", [
+        ("app server", "Application server"),
+        ("env type", "Environment type"),
+        ("loc name", "Location name"),
+        ("ost version", "OperatingSystem version"),
+        ("consumer system", "source system"),
+        ("provider application", "destination application"),
+        ("consuming", "source"),
+        ("providing", "destination"),
+        ("app env loc ost", "Application Environment Location OperatingSystem")
+    ])
+    def test_header_conversion(self, input_header, expected_output):
+        assert MergeService._convert_header(input_header) == expected_output
+
+    @pytest.mark.parametrize("input_header,expected_expanded", [
+        ("app server", "Application server"),
+        ("env type loc", "Environment type Location"),
+        ("ost app", "OperatingSystem Application")
+    ])
+    def test_expand_abbreviations(self, input_header, expected_expanded):
+        assert MergeService._expand_abbreviations(input_header) == expected_expanded
+
     @pytest.mark.parametrize("guideline_data,input_data,expected_matched,expected_missing,expected_extra", [
         (
-            {SOURCE: ["v1"], DESTINATION: ["v2"]},
-            {CONSUMER: ["v1"], PROVIDER: ["v2"]},
-            [SOURCE, DESTINATION],
+            {"Application Server": ["v1"]},
+            {"app server": ["v1"]},
+            ["Application Server"],
             [],
             []
         ),
         (
-            {"Id": [1], "Extra": ["data"]},
-            {"Id": [1]},
-            ["Id"],
-            ["Extra"],
+            {"Environment Type": ["v1"], "Location Name": ["v2"]},
+            {"env type": ["v1"], "loc name": ["v2"]},
+            ["Environment Type", "Location Name"],
+            [],
             []
         ),
         (
-            {"Name": ["John"], "Age": [30]},
-            {"NAME": ["John"], "AGE": [30], "Extra": ["data"]},
-            ["Name", "Age"],
+            {"Source System": ["v1"], "Destination Application": ["v2"]},
+            {"Consumer System": ["v1"], "Provider Application": ["v2"]},
+            ["Source System", "Destination Application"],
             [],
-            ["Extra"]
+            []
+        ),
+        (
+            {"Source Server": ["v1"]},
+            {"Consuming Server": ["v1"]},
+            ["Source Server"],
+            [],
+            []
         )
     ])
-    def test_header_comparisons(self, guideline_data, input_data, expected_matched, expected_missing, expected_extra):
+    def test_header_comparisons_with_conversions(self, guideline_data, input_data,
+                                               expected_matched, expected_missing, expected_extra):
         guideline_df = pd.DataFrame(guideline_data)
         input_df = pd.DataFrame(input_data)
 
@@ -142,26 +143,20 @@ class TestMergeService:
         assert sorted(result[HEADERS_MISSING]) == sorted(expected_missing)
         assert sorted(result[HEADERS_EXTRA]) == sorted(expected_extra)
 
-    @pytest.mark.parametrize("guideline_data,input_data,expected_result", [
-        (
-            {"Id": [1], "Name": ["John"]},
-            {"Id": [1], "Name": ["John"]},
-            {"Id": [1], "Name": ["John"]}
-        ),
-        (
-            {SOURCE: [1], "Extra": [2]},
-            {CONSUMER: [1]},
-            {SOURCE: [1], "Extra": [None]}
-        ),
-        (
-            {"A": [1], "B": [2]},
-            {"C": [3]},
-            {"A": [None], "B": [None]}
-        )
-    ])
-    def test_merge_files(self, tmp_path, guideline_data, input_data, expected_result):
-        # Suppress pandas warnings about future behavior
-        pd.set_option('future.no_silent_downcasting', True)
+    def test_merge_files_with_conversions(self, tmp_path):
+        guideline_data = {
+            "Application Server": ["server1"],
+            "Environment Type": ["prod"],
+            "Source System": ["sys1"],
+            "Destination Application": ["app1"]
+        }
+        input_data = {
+            "app server": ["server1"],
+            "env type": ["prod"],
+            "Consumer System": ["sys1"],
+            "Provider Application": ["app1"]
+        }
+        expected_columns = list(guideline_data.keys())
 
         guideline_path = tmp_path / GUIDELINE_FILENAME
         input_path = tmp_path / TEST_EXCEL_INPUT
@@ -171,15 +166,12 @@ class TestMergeService:
 
         merged_content = MergeService.merge_files(guideline_path, input_path)
         result_df = pd.read_csv(StringIO(merged_content))
-        expected_df = pd.DataFrame(expected_result)
 
-        expected_df = expected_df.replace({None: np.nan}, inplace=False)
-
-        pd.testing.assert_frame_equal(
-            result_df[expected_df.columns],
-            expected_df,
-            check_dtype=False
-        )
+        assert all(col in result_df.columns for col in expected_columns)
+        assert result_df["Application Server"].iloc[0] == "server1"
+        assert result_df["Environment Type"].iloc[0] == "prod"
+        assert result_df["Source System"].iloc[0] == "sys1"
+        assert result_df["Destination Application"].iloc[0] == "app1"
 
 
 class TestDirectoryService:

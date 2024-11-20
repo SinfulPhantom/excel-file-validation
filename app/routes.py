@@ -1,4 +1,6 @@
 import os
+from typing import Dict
+
 from flask import Blueprint, render_template, request, flash, make_response, session, Response
 from flask.sessions import SessionMixin
 from pandas import DataFrame
@@ -51,7 +53,7 @@ def upload_file() -> str:
                     filepath, file_id = FileService.save_input_file(file)
                     input_df: DataFrame = FileService.process_input_file(filepath)
 
-                    header_comparison: dict = MergeService.compare_headers(guideline_df, input_df)
+                    header_comparison: Dict = MergeService.compare_headers(guideline_df, input_df)
 
                     results.append({
                         'filename': file.filename,
