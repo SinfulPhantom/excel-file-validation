@@ -70,7 +70,7 @@ def upload_file() -> str:
                     flash(f'Error processing {file.filename}: {str(e)}', ERROR)
                     FileService.cleanup_file(filepath)
 
-        session[SESSION_GUIDELINE_PATH]: SessionMixin[str] = guideline_path
+        session[SESSION_GUIDELINE_PATH] = guideline_path
         session[SESSION_SAVED_PATH] = saved_files
         return render_template(RESULTS_TEMPLATE, results=results)
 
