@@ -10,9 +10,6 @@ OPENPYXL_ENGINE: str = 'openpyxl'
 XLRD_ENGINE: str = 'xlrd'
 
 # File extensions
-CSV_FILE_TYPE: str = '.csv'
-EXCEL_BIFF_FILE_TYPE: str = '.xls'
-EXCEL_XML_FILE_TYPE: str = '.xlsx'
 ALLOWED_INPUT_EXTENSIONS: set[str] = {'xlsx', 'xls'}
 ALLOWED_GUIDELINE_EXTENSION: set[str] = {'csv'}
 
@@ -51,6 +48,7 @@ MSG_INVALID_GUIDELINE: str = 'Invalid guideline format'
 MSG_FILE_TOO_LARGE: str = f'File size exceeds {MAX_FILE_SIZE_MB}MB limit'
 MSG_SESSION_EXPIRED: str = 'Session expired'
 MSG_FILE_NOT_FOUND: str = 'File not found'
+MSG_ENCRYPTED_FILE: str = "This Excel file appears to be password protected. Please provide an unencrypted file."
 
 # Files
 TEST_FORMAT_XLSX: str = 'test.xlsx'
