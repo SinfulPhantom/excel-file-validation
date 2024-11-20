@@ -86,13 +86,11 @@
           </div>
 
           <div class="mt-4 d-flex gap-2">
-            {% if result.missing_headers %}
-              <button class="btn btn-primary d-flex align-items-center merge-btn" data-file-id="{{ result.file_id }}" data-filename="{{ result.filename }}" onclick="downloadFile('{{ result.file_id }}', '{{ result.filename }}')">
-                <span class="spinner-border spinner-border-sm d-none me-2" role="status"></span>
-                <i class="bi bi-download me-2"></i>
-                Merge and Download
-              </button>
-            {% endif %}
+            <button class="btn btn-primary d-flex align-items-center merge-btn" data-file-id="{{ result.file_id }}" data-filename="{{ result.filename }}" onclick="downloadFile('{{ result.file_id }}', '{{ result.filename }}')">
+              <span class="spinner-border spinner-border-sm d-none me-2" role="status"></span>
+              <i class="bi bi-download me-2"></i>
+              Merge and Download
+            </button>
           </div>
         </div>
       {% endfor %}
