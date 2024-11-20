@@ -16,9 +16,14 @@ EXCEL_XML_FILE_TYPE: str = '.xlsx'
 ALLOWED_INPUT_EXTENSIONS: set[str] = {'xlsx', 'xls'}
 ALLOWED_GUIDELINE_EXTENSION: set[str] = {'csv'}
 
+# Template files
+UPLOAD_TEMPLATE = 'upload.html'
+RESULTS_TEMPLATE = 'results.html'
+
 # Headers
 HEADERS_MISSING: str = 'missing_headers'
 HEADERS_EXTRA: str = 'extra_headers'
+HEADERS_MATCHED: str = 'matched_headers'
 
 # Content types
 CSV_CONTENT_TYPE: str = 'text/csv'
@@ -67,4 +72,10 @@ BASE_TEST_DATA_EMAIL: Dict = {
     'Name': [],
     'Age': [],
     'Email': []
+}
+
+HEADER_CONVERSIONS = {
+    "Consumer": "Source",
+    "Provider": "Destination",
+    "Services": "Ports"
 }

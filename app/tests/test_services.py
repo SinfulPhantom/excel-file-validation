@@ -1,8 +1,11 @@
-from typing import Dict
+from typing import List
+
+import numpy as np
 import pytest
 import os
 import pandas as pd
-from io import BytesIO
+from io import BytesIO, StringIO
+
 from pandas import DataFrame
 from werkzeug.datastructures import FileStorage
 from app.services.file_service import FileService
@@ -11,8 +14,8 @@ from app.services.directory_service import DirectoryService
 from app.utils.constants import (
     UPLOAD_FOLDER, TEMP_FOLDER, EXCEL_CONTENT_TYPE, TEST_FORMAT_XLSX,
     TEST_FORMAT_XLS, TEST_FORMAT_CSV, TEST_FORMAT_TXT, GUIDELINE_FILENAME,
-    BASE_TEST_DATA_LOCATION, CSV_CONTENT_TYPE, OPENPYXL_ENGINE, TEST_EXCEL_INPUT,
-    HEADERS_EXTRA, HEADERS_MISSING, BASE_TEST_DATA_EMAIL
+    CSV_CONTENT_TYPE, OPENPYXL_ENGINE, TEST_EXCEL_INPUT,
+    HEADERS_EXTRA, HEADERS_MISSING, HEADERS_MATCHED,
 )
 
 
@@ -76,47 +79,107 @@ class TestFileService:
         assert filepath.endswith(f'_{TEST_FORMAT_XLSX}')
 
 
+SOURCE: str = 'Source Mode'
+DESTINATION: str = 'Destination Name'
+PORT: str = 'Ports Role'
+CONSUMER: str = 'Consumer Mode'
+PROVIDER: str = 'Provider Name'
+SERVICES: str = 'Services Role'
+
+@pytest.fixture
+def sample_guideline_df() -> DataFrame:
+    return pd.DataFrame({
+        'Id': [1],
+        'Name': ['John'],
+        SOURCE: ['Direct'],
+        DESTINATION: ['Location'],
+        PORT: [8080]
+    })
+
+
+@pytest.fixture
+def sample_input_df() -> DataFrame:
+    return pd.DataFrame({
+        'ID': [1],
+        'name': ['John'],
+        CONSUMER: ['Direct'],
+        PROVIDER: ['Location'],
+        SERVICES: [8080]
+    })
+
+
 class TestMergeService:
-    def test_compare_headers(self) -> None:
-        guideline_df: DataFrame = pd.DataFrame(BASE_TEST_DATA_LOCATION)
-        input_df: DataFrame = pd.DataFrame(BASE_TEST_DATA_EMAIL)
+    @pytest.mark.parametrize("guideline_data,input_data,expected_matched,expected_missing,expected_extra", [
+        (
+            {SOURCE: ["v1"], DESTINATION: ["v2"]},
+            {CONSUMER: ["v1"], PROVIDER: ["v2"]},
+            [SOURCE, DESTINATION],
+            [],
+            []
+        ),
+        (
+            {"Id": [1], "Extra": ["data"]},
+            {"Id": [1]},
+            ["Id"],
+            ["Extra"],
+            []
+        ),
+        (
+            {"Name": ["John"], "Age": [30]},
+            {"NAME": ["John"], "AGE": [30], "Extra": ["data"]},
+            ["Name", "Age"],
+            [],
+            ["Extra"]
+        )
+    ])
+    def test_header_comparisons(self, guideline_data, input_data, expected_matched, expected_missing, expected_extra):
+        guideline_df = pd.DataFrame(guideline_data)
+        input_df = pd.DataFrame(input_data)
 
-        result: Dict = MergeService.compare_headers(guideline_df, input_df)
+        result = MergeService.compare_headers(guideline_df, input_df)
 
-        # Check both missing and extra headers
-        assert sorted(result[HEADERS_MISSING]) == ['Location']
-        assert sorted(result[HEADERS_EXTRA]) == ['Email']
+        assert sorted(result[HEADERS_MATCHED]) == sorted(expected_matched)
+        assert sorted(result[HEADERS_MISSING]) == sorted(expected_missing)
+        assert sorted(result[HEADERS_EXTRA]) == sorted(expected_extra)
 
-    def test_merge_files(self) -> None:
-        # Create test files with actual data
-        guideline_df: DataFrame = pd.DataFrame({
-            'Name': ['John'],
-            'Age': [30],
-            'Location': ['NY']
-        })
-        input_df: DataFrame = pd.DataFrame({
-            'Name': ['John'],
-            'Age': [30]
-        })
+    @pytest.mark.parametrize("guideline_data,input_data,expected_result", [
+        (
+            {"Id": [1], "Name": ["John"]},
+            {"Id": [1], "Name": ["John"]},
+            {"Id": [1], "Name": ["John"]}
+        ),
+        (
+            {SOURCE: [1], "Extra": [2]},
+            {CONSUMER: [1]},
+            {SOURCE: [1], "Extra": [None]}
+        ),
+        (
+            {"A": [1], "B": [2]},
+            {"C": [3]},
+            {"A": [None], "B": [None]}
+        )
+    ])
+    def test_merge_files(self, tmp_path, guideline_data, input_data, expected_result):
+        # Suppress pandas warnings about future behavior
+        pd.set_option('future.no_silent_downcasting', True)
 
-        DirectoryService.ensure_upload_dirs()
-        guideline_path: str = os.path.join(UPLOAD_FOLDER, GUIDELINE_FILENAME)
-        input_path: str = os.path.join(UPLOAD_FOLDER, TEST_EXCEL_INPUT)
+        guideline_path = tmp_path / GUIDELINE_FILENAME
+        input_path = tmp_path / TEST_EXCEL_INPUT
 
-        # Save test files
-        guideline_df.to_csv(guideline_path, index=False)
-        with pd.ExcelWriter(input_path, engine=OPENPYXL_ENGINE) as writer:
-            input_df.to_excel(writer, index=False)
+        pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
+        pd.DataFrame(input_data).to_excel(input_path, index=False)
 
-        # Test merge operation
-        merged_content: str = MergeService.merge_files(guideline_path, input_path)
-        result_df: DataFrame = pd.read_csv(BytesIO(merged_content.encode()))
+        merged_content = MergeService.merge_files(guideline_path, input_path)
+        result_df = pd.read_csv(StringIO(merged_content))
+        expected_df = pd.DataFrame(expected_result)
 
-        # Verify results
-        assert all(col in result_df.columns for col in ['Name', 'Age', 'Location'])
-        assert result_df['Name'].iloc[0] == 'John'
-        assert result_df['Age'].iloc[0] == 30
-        assert pd.isna(result_df['Location'].iloc[0])
+        expected_df = expected_df.replace({None: np.nan}, inplace=False)
+
+        pd.testing.assert_frame_equal(
+            result_df[expected_df.columns],
+            expected_df,
+            check_dtype=False
+        )
 
 
 class TestDirectoryService:
@@ -132,7 +195,7 @@ class TestDirectoryService:
 
     def test_cleanup_temp_files(self) -> None:
         # Create test files
-        test_files: list[str] = [
+        test_files: List[str] = [
             os.path.join(UPLOAD_FOLDER, 'test1.txt'),
             os.path.join(TEMP_FOLDER, 'test2.txt')
         ]

@@ -12,11 +12,11 @@ from app.services.directory_service import DirectoryService
 from app.utils.constants import (
     ERROR, MSG_MISSING_FILES, MSG_INVALID_GUIDELINE,
     MSG_SESSION_EXPIRED, MSG_FILE_NOT_FOUND, CSV_CONTENT_TYPE,
-    INPUT_FILE, GUIDELINE_FILE, SESSION_GUIDELINE_PATH, SESSION_SAVED_PATH
+    INPUT_FILE, GUIDELINE_FILE, SESSION_GUIDELINE_PATH,
+    SESSION_SAVED_PATH, UPLOAD_TEMPLATE, RESULTS_TEMPLATE
 )
 
 main: Blueprint = Blueprint('main', __name__)
-
 
 @main.route('/', methods=['GET', 'POST'])
 def upload_file() -> str:
@@ -25,14 +25,14 @@ def upload_file() -> str:
     if request.method == 'POST':
         if GUIDELINE_FILE not in request.files or INPUT_FILE not in request.files:
             flash(MSG_MISSING_FILES, ERROR)
-            return render_template('upload.html')
+            return render_template(UPLOAD_TEMPLATE)
 
         guideline_file: FileStorage = request.files[GUIDELINE_FILE]
         input_files: list[FileStorage] = request.files.getlist(INPUT_FILE)
 
         if guideline_file.filename == '' or not FileService.allowed_guideline_file(guideline_file.filename):
             flash(MSG_INVALID_GUIDELINE, ERROR)
-            return render_template('upload.html')
+            return render_template(UPLOAD_TEMPLATE)
 
         try:
             guideline_path, session_id = FileService.save_guideline_file(guideline_file)
@@ -40,7 +40,7 @@ def upload_file() -> str:
         except Exception:
             FileService.cleanup_file(guideline_path)
             flash(MSG_INVALID_GUIDELINE, ERROR)
-            return render_template('upload.html')
+            return render_template(UPLOAD_TEMPLATE)
 
         results: list = []
         saved_files: list = []
@@ -70,10 +70,9 @@ def upload_file() -> str:
 
         session[SESSION_GUIDELINE_PATH]: SessionMixin[str] = guideline_path
         session[SESSION_SAVED_PATH] = saved_files
-        return render_template('results.html', results=results)
+        return render_template(RESULTS_TEMPLATE, results=results)
 
-    return render_template('upload.html')
-
+    return render_template(UPLOAD_TEMPLATE)
 
 @main.route('/merge_and_download/<file_id>')
 def merge_and_download(file_id) -> Response | tuple[str, int]:
