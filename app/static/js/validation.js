@@ -12,7 +12,9 @@ function handleDownload(fileId, filename) {
   fetch(`/merge_and_download/${fileId}`)
     .then(response => {
       if (!response.ok) {
-        throw new Error('Download failed. Please try again.');
+        return response.text().then(errorMsg => {
+          throw new Error(errorMsg || 'Download failed. Please try again.');
+        });
       }
       return response.blob();
     })
