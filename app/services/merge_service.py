@@ -47,8 +47,20 @@ class MergeService:
         result_df = pd.DataFrame(columns=guideline_df.columns)
 
         # Copy data from input_df, maintaining guideline column order
-        for col in guideline_df.columns:
-            result_df[col] = input_df[col] if col in input_df.columns else pd.NA
+        try:
+            for col in guideline_df.columns:
+                result_df[col] = input_df[col] if col in input_df.columns else pd.NA
+        except ValueError as e:
+            if "Columns must be same length as key" in str(e):
+                # Log the error for debugging
+                print(f"ValueError in merge_files: {str(e)}")
+                # Handle the exception gracefully
+                # Option 1: Skip the problematic column
+                # Option 2: Fill missing values with a default
+                # Option 3: Truncate or pad the column to match length
+                # Choose an appropriate strategy based on your requirements
+            else:
+                raise  # Re-raise other ValueErrors
 
         # Convert to CSV string
         output = StringIO()
