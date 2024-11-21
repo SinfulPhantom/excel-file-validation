@@ -1,6 +1,5 @@
 from typing import List
 
-import numpy as np
 import pytest
 import os
 import pandas as pd
@@ -14,7 +13,7 @@ from app.services.directory_service import DirectoryService
 from app.utils.constants import (
     UPLOAD_FOLDER, TEMP_FOLDER, EXCEL_CONTENT_TYPE, TEST_FORMAT_XLSX,
     TEST_FORMAT_XLS, TEST_FORMAT_CSV, TEST_FORMAT_TXT, GUIDELINE_FILENAME,
-    CSV_CONTENT_TYPE, OPENPYXL_ENGINE, TEST_EXCEL_INPUT,
+    CSV_CONTENT_TYPE, OPENPYXL_ENGINE,
     HEADERS_EXTRA, HEADERS_MISSING, HEADERS_MATCHED,
 )
 
@@ -81,59 +80,40 @@ class TestFileService:
 
 class TestMergeService:
     @pytest.mark.parametrize("input_header,expected_output", [
-        ("app server", "Application server"),
-        ("env type", "Environment type"),
-        ("loc name", "Location name"),
-        ("ost version", "OperatingSystem version"),
-        ("consumer system", "source system"),
-        ("provider application", "destination application"),
-        ("consuming", "source"),
-        ("providing", "destination"),
-        ("app env loc ost", "Application Environment Location OperatingSystem")
+        ("Source Application", "Source App Label"),
+        ("Source IP Lists", "Source IPList"),
+        ("Destination Application", "Destination App Label"),
+        ("Total Connection Count", "Num Flows"),
+        ("Unknown Header", "Unknown Header")  # Test non-matching header
     ])
     def test_header_conversion(self, input_header, expected_output):
         assert MergeService._convert_header(input_header) == expected_output
 
-    @pytest.mark.parametrize("input_header,expected_expanded", [
-        ("app server", "Application server"),
-        ("env type loc", "Environment type Location"),
-        ("ost app", "OperatingSystem Application")
-    ])
-    def test_expand_abbreviations(self, input_header, expected_expanded):
-        assert MergeService._expand_abbreviations(input_header) == expected_expanded
-
     @pytest.mark.parametrize("guideline_data,input_data,expected_matched,expected_missing,expected_extra", [
         (
-            {"Application Server": ["v1"]},
-            {"app server": ["v1"]},
-            ["Application Server"],
+            {"Source App Label": ["v1"], "Destination App Label": ["v2"]},
+            {"Source Application": ["v1"], "Destination Application": ["v2"]},
+            ["Source App Label", "Destination App Label"],
             [],
             []
         ),
         (
-            {"Environment Type": ["v1"], "Location Name": ["v2"]},
-            {"env type": ["v1"], "loc name": ["v2"]},
-            ["Environment Type", "Location Name"],
+            {"Source Environment": ["v1"], "Source IPList": ["v2"]},
+            {"Source Env": ["v1"], "Source IP Lists": ["v2"]},
+            ["Source Environment", "Source IPList"],
             [],
             []
         ),
         (
-            {"Source System": ["v1"], "Destination Application": ["v2"]},
-            {"Consumer System": ["v1"], "Provider Application": ["v2"]},
-            ["Source System", "Destination Application"],
+            {"Num Flows": ["100"]},
+            {"Total Connection Count": ["100"], "Extra": ["data"]},
+            ["Num Flows"],
             [],
-            []
-        ),
-        (
-            {"Source Server": ["v1"]},
-            {"Consuming Server": ["v1"]},
-            ["Source Server"],
-            [],
-            []
+            ["Extra"]
         )
     ])
-    def test_header_comparisons_with_conversions(self, guideline_data, input_data,
-                                               expected_matched, expected_missing, expected_extra):
+    def test_header_comparisons(self, guideline_data, input_data,
+                              expected_matched, expected_missing, expected_extra):
         guideline_df = pd.DataFrame(guideline_data)
         input_df = pd.DataFrame(input_data)
 
@@ -143,35 +123,34 @@ class TestMergeService:
         assert sorted(result[HEADERS_MISSING]) == sorted(expected_missing)
         assert sorted(result[HEADERS_EXTRA]) == sorted(expected_extra)
 
-    def test_merge_files_with_conversions(self, tmp_path):
+    def test_merge_files(self, tmp_path):
         guideline_data = {
-            "Application Server": ["server1"],
-            "Environment Type": ["prod"],
-            "Source System": ["sys1"],
-            "Destination Application": ["app1"]
+            "Source App Label": ["app1"],
+            "Destination App Label": ["dest1"],
+            "Num Flows": [100]
         }
         input_data = {
-            "app server": ["server1"],
-            "env type": ["prod"],
-            "Consumer System": ["sys1"],
-            "Provider Application": ["app1"]
+            "Source Application": ["app1"],
+            "Destination Application": ["dest1"],
+            "Total Connection Count": [100]
         }
-        expected_columns = list(guideline_data.keys())
+        expected_df = pd.DataFrame(guideline_data)
 
-        guideline_path = tmp_path / GUIDELINE_FILENAME
-        input_path = tmp_path / TEST_EXCEL_INPUT
+        guideline_path = tmp_path / "guideline.csv"
+        input_path = tmp_path / "input.xlsx"
 
         pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
-        pd.DataFrame(input_data).to_excel(input_path, index=False)
+        with pd.ExcelWriter(input_path, engine='openpyxl') as writer:
+            pd.DataFrame(input_data).to_excel(writer, index=False)
 
         merged_content = MergeService.merge_files(guideline_path, input_path)
         result_df = pd.read_csv(StringIO(merged_content))
 
-        assert all(col in result_df.columns for col in expected_columns)
-        assert result_df["Application Server"].iloc[0] == "server1"
-        assert result_df["Environment Type"].iloc[0] == "prod"
-        assert result_df["Source System"].iloc[0] == "sys1"
-        assert result_df["Destination Application"].iloc[0] == "app1"
+        pd.testing.assert_frame_equal(
+            result_df,
+            expected_df,
+            check_dtype=False
+        )
 
 
 class TestDirectoryService:

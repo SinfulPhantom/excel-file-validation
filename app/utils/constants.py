@@ -48,7 +48,18 @@ MSG_INVALID_GUIDELINE: str = 'Invalid guideline format'
 MSG_FILE_TOO_LARGE: str = f'File size exceeds {MAX_FILE_SIZE_MB}MB limit'
 MSG_SESSION_EXPIRED: str = 'Session expired'
 MSG_FILE_NOT_FOUND: str = 'File not found'
-MSG_ENCRYPTED_FILE: str = "This Excel file appears to be password protected. Please provide an unencrypted file."
+MSG_ENCRYPTED_FILE: str = (
+    "This Excel file appears to be protected. Please follow these steps to create an unprotected copy:\n"
+    "1. Open the original Excel file\n"
+    "2. Click anywhere in the data\n"
+    "2. Select all data (Ctrl+A - Twice)\n"
+    "3. Copy the data (Ctrl+C)\n"
+    "4. Create a new Excel workbook\n"
+    "5. Paste the data (Ctrl+V)\n"
+    "6. Save the new file\n"
+    "7. Upload the new file"
+)
+MSG_ERROR: str = "Unable to read the Excel file. Please ensure it's a valid Excel file (.xlsx or .xls) and try again."
 
 # Files
 TEST_FORMAT_XLSX: str = 'test.xlsx'
@@ -72,17 +83,23 @@ BASE_TEST_DATA_EMAIL: Dict = {
     'Email': []
 }
 
-# Mapping
-HEADER_CONVERSIONS: Dict = {
-    "Consumer": "Source",
-    "Consuming": "Source",
-    "Provider": "Destination",
-    "Providing": "Destination",
-    "Services": "Ports"
-}
-ABBREVIATIONS_MAP: Dict = {
-    'app': 'Application',
-    'env': 'Environment',
-    'loc': 'Location',
-    'ost': 'OperatingSystem'
+## Mapping
+FULL_HEADER_CONVERSIONS: Dict[str, str] = {
+    # Source
+    "Source Application": "Source App Label",
+    "Source Env": "Source Environment",
+    "Source Enforcement": "Source Enforcement Mode",
+    "Source IP Lists": "Source IPList",
+    #Destination
+    "Destination Application": "Destination App Label",
+    "Destination Env": "Destination Environment",
+    "Destination Server": "Destination Name",
+    "Destination IP List": "Destination IPList",
+    "Destination Enforcement": "Destination Enforcement Mode",
+    # Misc
+    "Boundary Control": "Reported Enforcement Boundary",
+    "Local Control": "Reported Policy Decision",
+    "Total Connection Count": "Num Flows",
+    "First Detected Date": "First Detected",
+    "Last Detected Date": "Last Detected"
 }

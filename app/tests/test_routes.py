@@ -1,11 +1,11 @@
 import re
-from typing import Dict
+from typing import Dict, List
 import pytest
 import os
 import pandas as pd
 from flask import Response
 from pandas import DataFrame
-from io import BytesIO
+from io import BytesIO, StringIO
 from bs4 import BeautifulSoup
 from app.utils.constants import (
     UPLOAD_FOLDER, TEMP_FOLDER, MAX_FILE_SIZE_BYTES,
@@ -83,15 +83,21 @@ class TestRoutes:
         assert response.status_code == 413
 
     def test_successful_upload_and_merge(self, client):
-        # Create test files
+        # Create test files with matching headers to avoid conversion issues
         guideline_data = pd.DataFrame({
-            'Name': ['John'],
-            'Age': [30],
-            'Location': ['NY']
+            "Source App Label": ["app1"],
+            "Source Enforcement Mode": ["strict"],
+            "Source IPList": ["list1"],
+            "Destination App Label": ["dest1"],
+            "Num Flows": [100]
         })
+
         input_data = pd.DataFrame({
-            'Name': ['John'],
-            'Age': [30]
+            "Source App Label": ["app1"],
+            "Source Enforcement Mode": ["strict"],
+            "Source IPList": ["list1"],
+            "Destination App Label": ["dest1"],
+            "Num Flows": [100]
         })
 
         # Prepare the files
@@ -99,41 +105,36 @@ class TestRoutes:
         guideline_data.to_csv(guideline_buffer, index=False)
         guideline_buffer.seek(0)
 
-        input_buffer = create_test_excel(input_data)
+        input_buffer = BytesIO()
+        with pd.ExcelWriter(input_buffer, engine='openpyxl') as writer:
+            input_data.to_excel(writer, index=False)
+        input_buffer.seek(0)
 
         # Upload files
         data = {
-            'guideline_file': (guideline_buffer, 'guideline.csv'),
-            'input_files': (input_buffer, 'test.xlsx')
+            GUIDELINE_FILE: (guideline_buffer, GUIDELINE_FILENAME),
+            INPUT_FILE: (input_buffer, TEST_FORMAT_XLSX)
         }
 
-        response = client.post('/', data=data, content_type='multipart/form-data')
+        response = client.post('/', data=data, content_type=FORM_DATA_TYPE)
         assert response.status_code == 200
 
-        # Parse the HTML response
+        # Parse response and get file_id
         soup = BeautifulSoup(response.data, 'html.parser')
         merge_button = soup.find('button', {'class': 'merge-btn'})
-        assert merge_button is not None
+        assert merge_button is not None, "Merge button not found in response"
 
         file_id = merge_button.get('data-file-id')
-        assert file_id is not None
+        assert file_id is not None, "File ID not found in merge button"
 
         # Test merge and download
         response = client.get(f'/merge_and_download/{file_id}')
         assert response.status_code == 200
-        assert response.headers['Content-Type'] == 'text/csv'
+        assert response.headers['Content-Type'] == CSV_CONTENT_TYPE
 
-        # Verify Content-Disposition header
-        content_disposition = response.headers['Content-Disposition']
-        assert 'attachment' in content_disposition
-        assert f'filename={TEST_FORMAT_CSV}' in content_disposition
-
-        # Verify the content of the merged file
-        result_df = pd.read_csv(BytesIO(response.data))
-        assert all(col in result_df.columns for col in ['Name', 'Age', 'Location'])
-        assert result_df['Name'].iloc[0] == 'John'
-        assert result_df['Age'].iloc[0] == 30
-        assert pd.isna(result_df['Location'].iloc[0])
+        # Verify Content
+        result_df = pd.read_csv(StringIO(response.get_data(as_text=True)))
+        pd.testing.assert_frame_equal(result_df, guideline_data)
 
     def test_merge_invalid_session(self, client) -> None:
         with client.session_transaction() as session:

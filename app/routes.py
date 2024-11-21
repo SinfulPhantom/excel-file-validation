@@ -38,7 +38,8 @@ def upload_file() -> str:
         try:
             guideline_path, session_id = FileService.save_guideline_file(guideline_file)
             guideline_df: DataFrame = FileService.process_guideline_file(guideline_path)
-        except Exception:
+        except Exception as e:
+            print(f"Error processing guideline file: {str(e)}")  # Debug print
             FileService.cleanup_file(guideline_path)
             flash(MSG_INVALID_GUIDELINE, ERROR)
             return render_template(UPLOAD_TEMPLATE)
@@ -57,7 +58,9 @@ def upload_file() -> str:
                     results.append({
                         'filename': file.filename,
                         'file_id': file_id,
-                        **header_comparison
+                        'missing_headers': header_comparison.get('missing_headers', []),
+                        'extra_headers': header_comparison.get('extra_headers', []),
+                        'matched_headers': header_comparison.get('matched_headers', [])
                     })
 
                     saved_files.append({
@@ -95,12 +98,11 @@ def merge_and_download(file_id) -> Response | tuple[str, int]:
         )
 
         original_name = os.path.splitext(input_file["original_name"])[0]
-        safe_filename: str = secure_filename(f"{original_name}")
+        safe_filename: str = secure_filename(f"{original_name}.csv")
 
         response: Response = make_response(merged_content)
-        response.headers['Content-Disposition'] = f'attachment; filename={safe_filename}.csv'
+        response.headers['Content-Disposition'] = f'attachment; filename={safe_filename}'
         response.headers['Content-Type'] = CSV_CONTENT_TYPE
-        # Add header to prevent caching
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'

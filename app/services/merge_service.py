@@ -1,76 +1,94 @@
 from io import StringIO
-from typing import Dict, List, Any
-
+from typing import Dict, List
+import re
 import pandas as pd
 from pandas import DataFrame
 from app.utils.constants import (
-    OPENPYXL_ENGINE, HEADERS_EXTRA, HEADERS_MISSING,
-    HEADERS_MATCHED, ABBREVIATIONS_MAP, HEADER_CONVERSIONS
+    OPENPYXL_ENGINE, HEADERS_EXTRA, HEADERS_MISSING, HEADERS_MATCHED,
+    FULL_HEADER_CONVERSIONS
 )
 
 
 class MergeService:
     @staticmethod
-    def _expand_abbreviations(header: str) -> str:
-        words: List[str] = header.lower().split()
-        expanded: List = []
-        for word in words:
-            expanded.append(ABBREVIATIONS_MAP.get(word, word) if word in ABBREVIATIONS_MAP else word)
-        return ' '.join(expanded)
-
-    @staticmethod
     def _convert_header(header: str) -> str:
-        # First expand abbreviations while preserving case
-        expanded: str = MergeService._expand_abbreviations(header)
+        """
+        Convert input header to standardized format using predefined mappings.
 
-        # Then handle header conversions
-        for old, new in HEADER_CONVERSIONS.items():
-            if old.lower() in expanded.lower():
-                # Replace while preserving case of the rest of the string
-                expanded = expanded.lower().replace(old.lower(), new.lower())
+        Uses FULL_HEADER_CONVERSIONS dictionary for exact matches only. Headers
+        not found in the mapping are returned unchanged.
 
-        return expanded
+        Args:
+            header: The input header string to convert
+
+        Returns:
+            The converted header if a mapping exists, otherwise the original header
+        """
+        return FULL_HEADER_CONVERSIONS.get(header, header)
 
     @staticmethod
     def merge_files(guideline_path: str, input_path: str) -> str:
-        guideline_df: DataFrame = pd.read_csv(guideline_path)
-        input_df: DataFrame = pd.read_excel(input_path, engine=OPENPYXL_ENGINE)
+        """
+        Merge input Excel file with guideline CSV based on header mappings.
 
-        header_mapping: Dict = {}
-        for col in input_df.columns:
-            converted: str = MergeService._convert_header(col)
-            if converted.lower() != col.lower():
-                matching_guideline_col = next(
-                    (gcol for gcol in guideline_df.columns
-                     if MergeService._convert_header(gcol).lower() == converted.lower()),
-                    converted
-                )
-                header_mapping[col] = matching_guideline_col
+        Process:
+        1. Load guideline and input files
+        2. Convert input headers using standardized mappings
+        3. Add missing columns with NA values
+        4. Reorder columns to match guideline
+        5. Convert to CSV string
 
-        if header_mapping:
-            input_df = input_df.rename(columns=header_mapping)
+        Args:
+            guideline_path: Path to the guideline CSV file
+            input_path: Path to the input Excel file
 
-        # Add missing columns from guideline
-        missing_columns: set = set(guideline_df.columns) - set(input_df.columns)
-        for column in missing_columns:
-            input_df[column] = pd.NA
+        Returns:
+            String containing merged data in CSV format
+        """
+        guideline_df = pd.read_csv(guideline_path)
+        input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE)
 
-        output: StringIO = StringIO()
+        header_mapping = {col: MergeService._convert_header(col) for col in input_df.columns}
+        input_df = input_df.rename(columns=header_mapping)
+
+        for col in guideline_df.columns:
+            if col not in input_df.columns:
+                input_df[col] = pd.NA
+
+        input_df = input_df[guideline_df.columns]
+
+        output = StringIO()
         input_df.to_csv(output, index=False)
         output.seek(0)
-
         return output.getvalue()
 
     @staticmethod
     def compare_headers(guideline_df: DataFrame, input_df: DataFrame) -> Dict[str, List[str]]:
-        guideline_map: Dict[str, Any] = {MergeService._convert_header(col).lower(): col for col in guideline_df.columns}
-        input_map: Dict[str, Any] = {MergeService._convert_header(col).lower(): col for col in input_df.columns}
+        """
+        Compare headers between guideline and input dataframes.
 
-        guideline_headers = set(guideline_map.keys())
-        input_headers = set(input_map.keys())
+        Process:
+        1. Convert input headers using standardized mappings
+        2. Find intersections and differences between header sets:
+           - Matched: Headers present in both after conversion
+           - Missing: Guideline headers not in converted input
+           - Extra: Input headers with no guideline match
+
+        Args:
+            guideline_df: DataFrame containing guideline data
+            input_df: DataFrame containing input data
+
+        Returns:
+            Dictionary with matched, missing, and extra headers
+        """
+        input_converted = {col: MergeService._convert_header(col) for col in input_df.columns}
+
+        guideline_headers = set(guideline_df.columns)
+        converted_input_headers = set(input_converted.values())
 
         return {
-            HEADERS_MISSING: sorted([guideline_map[h] for h in guideline_headers - input_headers]),
-            HEADERS_EXTRA: sorted([input_map[h] for h in input_headers - guideline_headers]),
-            HEADERS_MATCHED: sorted([guideline_map[h] for h in guideline_headers & input_headers])
+            HEADERS_MATCHED: sorted(list(guideline_headers & converted_input_headers)),
+            HEADERS_MISSING: sorted(list(guideline_headers - converted_input_headers)),
+            HEADERS_EXTRA: sorted([col for col in input_df.columns
+                                   if input_converted[col] not in guideline_headers])
         }

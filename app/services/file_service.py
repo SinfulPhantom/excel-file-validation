@@ -7,7 +7,7 @@ from pandas import DataFrame
 from app.utils.constants import (
     UPLOAD_FOLDER, ALLOWED_INPUT_EXTENSIONS,
     ALLOWED_GUIDELINE_EXTENSION, OPENPYXL_ENGINE,
-    XLRD_ENGINE, GUIDELINE_FILENAME, MSG_ENCRYPTED_FILE
+    XLRD_ENGINE, GUIDELINE_FILENAME, MSG_ENCRYPTED_FILE, MSG_ERROR
 )
 
 
@@ -49,6 +49,9 @@ class FileService:
         try:
             return pd.read_excel(filepath, engine=OPENPYXL_ENGINE)
         except Exception as e:
+            error_msg = str(e).lower()
+            if "not a zip file" in error_msg or "file is not a zip file" in error_msg:
+                raise ValueError(MSG_ENCRYPTED_FILE)
             exceptions.append(f"openpyxl error: {str(e)}")
 
         # Try xlrd as fallback (for .xls)
@@ -57,18 +60,15 @@ class FileService:
         except Exception as e:
             exceptions.append(f"xlrd error: {str(e)}")
 
-        # If both fail, try with default engine
+        # If both engines fail, try with default engine
         try:
             return pd.read_excel(filepath)
         except Exception as e:
             exceptions.append(f"default engine error: {str(e)}")
 
-        # If file appears to be encrypted
-        if any("not a zip file" in str(e).lower() for e in exceptions):
-            raise ValueError(MSG_ENCRYPTED_FILE)
-
-        # If all attempts fail, raise the last exception with details
-        raise ValueError(f"Failed to read Excel file. Attempted multiple engines:\n" + "\n".join(exceptions))
+        # If all attempts fail, raise a user-friendly error with technical details in logs
+        print(f"Excel reading errors:\n" + "\n".join(exceptions))  # Log technical details
+        raise ValueError(MSG_ERROR)
 
     @staticmethod
     def cleanup_file(filepath: str) -> None:
