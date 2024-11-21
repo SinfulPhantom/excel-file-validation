@@ -39,33 +39,35 @@ class MergeService:
         guideline_df = pd.read_csv(guideline_path)
         input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE)
 
-        # Convert input headers
-        header_mapping = {col: MergeService._convert_header(col) for col in input_df.columns}
-        input_df = input_df.rename(columns=header_mapping)
+        # Create mapping for header conversions while preserving case
+        header_mapping = {}
+        for col in input_df.columns:
+            converted = MergeService._convert_header(col)
+            if converted != col.lower():
+                # Find matching guideline column to preserve its case
+                matching_guideline_col = next(
+                    (gcol for gcol in guideline_df.columns
+                     if MergeService._convert_header(gcol) == converted),
+                    converted.title()
+                )
+                header_mapping[col] = matching_guideline_col
 
-        # Create new DataFrame with guideline columns in correct order
-        result_df = pd.DataFrame(columns=guideline_df.columns)
+        # Rename columns using the mapping
+        if header_mapping:
+            input_df = input_df.rename(columns=header_mapping)
 
-        # Copy data from input_df, maintaining guideline column order
-        try:
-            for col in guideline_df.columns:
-                result_df[col] = input_df[col] if col in input_df.columns else pd.NA
-        except ValueError as e:
-            if "Columns must be same length as key" in str(e):
-                # Log the error for debugging
-                print(f"ValueError in merge_files: {str(e)}")
-                # Handle the exception gracefully
-                # Option 1: Skip the problematic column
-                # Option 2: Fill missing values with a default
-                # Option 3: Truncate or pad the column to match length
-                # Choose an appropriate strategy based on your requirements
-            else:
-                raise  # Re-raise other ValueErrors
+        # Add missing columns from guideline and fill with empty strings
+        missing_columns = set(guideline_df.columns) - set(input_df.columns)
+        for column in missing_columns:
+            input_df[column] = ""
 
-        # Convert to CSV string
-        output = StringIO()
-        result_df.to_csv(output, index=False)
+        # Reorder columns to match guideline
+        input_df = input_df[guideline_df.columns]
+
+        output: StringIO = StringIO()
+        input_df.to_csv(output, index=False)
         output.seek(0)
+
         return output.getvalue()
 
     @staticmethod
@@ -89,9 +91,13 @@ class MergeService:
         matched_headers = [col for col in guideline_df.columns
                            if col in converted_input_headers]
 
+        # Find removed columns
+        original_input_headers = set(input_df.columns)
+        removed_columns = [col for col in original_input_headers if input_converted[col] not in matched_headers]
+
         return {
             HEADERS_MATCHED: matched_headers,
             HEADERS_MISSING: sorted(list(guideline_headers - converted_input_headers)),
-            HEADERS_EXTRA: sorted([col for col in input_df.columns
-                                   if input_converted[col] not in guideline_headers])
+            HEADERS_EXTRA: sorted([col for col in input_df.columns if input_converted[col] not in guideline_headers]),
+            "removed_columns": sorted(removed_columns)
         }

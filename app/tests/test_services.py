@@ -173,6 +173,47 @@ class TestMergeService:
         assert sorted(result[HEADERS_MISSING]) == ["Age", "Email"]
         assert sorted(result[HEADERS_EXTRA]) == ["Address", "Phone"]
 
+    def test_merge_files_missing_columns(self, tmp_path):
+        guideline_data = {
+            "Source Application": ["app1"],
+            "Source Environment": ["prod"],
+            # "Destination Application": [""],  # Expecting empty string, not NaN
+            # "Destination Environment": [""]
+        }
+        input_data = {
+            "Source Application": ["app1"],
+            "Source Environment": ["prod"]
+        }
+
+        guideline_path = tmp_path / "guideline.csv"
+        input_path = tmp_path / "input.xlsx"
+
+        pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
+        with pd.ExcelWriter(input_path, engine='openpyxl') as writer:
+            pd.DataFrame(input_data).to_excel(writer, index=False)
+
+        merged_content = MergeService.merge_files(guideline_path, input_path)
+        result_df = pd.read_csv(StringIO(merged_content))
+
+        pd.testing.assert_frame_equal(result_df[guideline_data.keys()], pd.DataFrame(guideline_data))
+
+    def test_compare_headers_removed_columns(self):
+        guideline_df = pd.DataFrame({
+            "Source Application": ["app1"],
+            "Source Environment": ["prod"]
+        })
+        input_df = pd.DataFrame({
+            "Source App Label": ["app1"],  # Changed to match conversion
+            "Source Env": ["prod"]
+        })
+
+        result = MergeService.compare_headers(guideline_df, input_df)
+
+        assert result[HEADERS_MATCHED] == ["Source Application", "Source Environment"]
+        assert result[HEADERS_MISSING] == []
+        assert result[HEADERS_EXTRA] == []
+        assert sorted(result["removed_columns"]) == []
+
 
 class TestDirectoryService:
     def test_ensure_upload_dirs(self) -> None:

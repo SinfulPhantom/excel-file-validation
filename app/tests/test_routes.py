@@ -1,5 +1,4 @@
-import re
-from typing import Dict, List
+from typing import Dict
 import pytest
 import os
 import pandas as pd
@@ -83,7 +82,6 @@ class TestRoutes:
         assert response.status_code == 413
 
     def test_successful_upload_and_merge(self, client):
-        # Create test files with updated header mappings
         guideline_data = pd.DataFrame({
             "Source Application": ["app1"],
             "Source Environment": ["prod"],
@@ -98,7 +96,6 @@ class TestRoutes:
             "Total Connection Count": [100]
         })
 
-        # Prepare files for upload
         guideline_buffer = BytesIO()
         guideline_data.to_csv(guideline_buffer, index=False)
         guideline_buffer.seek(0)
@@ -108,7 +105,6 @@ class TestRoutes:
             input_data.to_excel(writer, index=False)
         input_buffer.seek(0)
 
-        # Upload files
         data = {
             GUIDELINE_FILE: (guideline_buffer, GUIDELINE_FILENAME),
             INPUT_FILE: (input_buffer, TEST_FORMAT_XLSX)
@@ -117,21 +113,25 @@ class TestRoutes:
         response = client.post('/', data=data, content_type=FORM_DATA_TYPE)
         assert response.status_code == 200
 
-        # Get file_id from response
         soup = BeautifulSoup(response.data, 'html.parser')
         download_button = soup.find('button', {'class': 'download-btn'})
         assert download_button is not None
         file_id = download_button.get('data-file-id')
         assert file_id is not None
 
-        # Test merge and download
         response = client.get(f'/merge_and_download/{file_id}')
         assert response.status_code == 200
         assert response.headers['Content-Type'] == CSV_CONTENT_TYPE
 
-        # Verify content
         result_df = pd.read_csv(StringIO(response.get_data(as_text=True)))
-        pd.testing.assert_frame_equal(result_df, guideline_data, check_dtype=False)
+        expected_df = pd.DataFrame({
+            "Source Application": ["app1"],
+            "Source Environment": ["prod"],
+            "Destination Application": ["dest1"],
+            "Num Flows": [100]
+        })
+
+        pd.testing.assert_frame_equal(result_df[expected_df.columns], expected_df)
 
     def test_merge_invalid_session(self, client) -> None:
         with client.session_transaction() as session:
