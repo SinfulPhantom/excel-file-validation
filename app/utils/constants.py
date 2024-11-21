@@ -77,11 +77,6 @@ BASE_TEST_DATA_LOCATION: Dict = {
     'Age': [],
     'Location': []
 }
-BASE_TEST_DATA_EMAIL: Dict = {
-    'Name': [],
-    'Age': [],
-    'Email': []
-}
 
 ## Mapping
 FULL_HEADER_CONVERSIONS: Dict[str, str] = {

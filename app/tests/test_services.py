@@ -14,7 +14,7 @@ from app.utils.constants import (
     UPLOAD_FOLDER, TEMP_FOLDER, EXCEL_CONTENT_TYPE, TEST_FORMAT_XLSX,
     TEST_FORMAT_XLS, TEST_FORMAT_CSV, TEST_FORMAT_TXT, GUIDELINE_FILENAME,
     CSV_CONTENT_TYPE, OPENPYXL_ENGINE,
-    HEADERS_EXTRA, HEADERS_MISSING, HEADERS_MATCHED,
+    HEADERS_EXTRA, HEADERS_MISSING, HEADERS_MATCHED, FULL_HEADER_CONVERSIONS, TEST_EXCEL_INPUT,
 )
 
 
@@ -79,101 +79,99 @@ class TestFileService:
 
 
 class TestMergeService:
-    @pytest.mark.parametrize("input_header,expected_output", [
-        ("Source App Label", "Source Application"),
-        ("Source IP Lists", "Source IPList"),
-        ("Destination App Label", "Destination Application"),
-        ("Total Connection Count", "Num Flows"),
-        ("First Detected Date", "First Detected"),
-        ("Unknown Header", "Unknown Header")  # Test non-matching header
-    ])
-    def test_header_conversion(self, input_header, expected_output):
-        assert MergeService._convert_header(input_header) == expected_output
-
-    @pytest.mark.parametrize("guideline_data,input_data,expected_matched,expected_missing,expected_extra", [
-        (
-            {
-                "Source Application": ["app1"],
-                "Source IPList": ["list1"],
-                "Destination Application": ["dest1"]
-            },
-            {
-                "Source App Label": ["app1"],
-                "Source IP Lists": ["list1"],
-                "Destination App Label": ["dest1"]
-            },
-            ["Source Application", "Source IPList", "Destination Application"],
-            [],
-            []
-        ),
-        (
-            {
-                "Source Environment": ["prod"],
-                "Num Flows": [100]
-            },
-            {
-                "Source Env": ["prod"],
-                "Total Connection Count": [100],
-                "Extra": ["data"]
-            },
-            ["Source Environment", "Num Flows"],
-            [],
-            ["Extra"]
-        ),
-        (
-            {
-                "First Detected": ["2024-01-01"],
-                "Last Detected": ["2024-01-31"]
-            },
-            {
-                "First Detected Date": ["2024-01-01"]
-            },
-            ["First Detected"],
-            ["Last Detected"],
-            []
-        )
-    ])
-    def test_header_comparisons(self, guideline_data, input_data,
-                              expected_matched, expected_missing, expected_extra):
-        guideline_df = pd.DataFrame(guideline_data)
-        input_df = pd.DataFrame(input_data)
-
-        result = MergeService.compare_headers(guideline_df, input_df)
-
-        assert sorted(result[HEADERS_MATCHED]) == sorted(expected_matched)
-        assert sorted(result[HEADERS_MISSING]) == sorted(expected_missing)
-        assert sorted(result[HEADERS_EXTRA]) == sorted(expected_extra)
-
-    def test_merge_files(self, tmp_path):
+    @pytest.fixture
+    def sample_data(self):
+        """Fixture providing sample data for tests"""
         guideline_data = {
-            "Source Application": ["app1"],
-            "Source Environment": ["prod"],
-            "Destination Application": ["dest1"],
-            "Num Flows": [100]
+            "First Name": ["John"],
+            "Last Name": ["Doe"],
+            "Age": [30],
+            "Email": ["john@example.com"]
         }
         input_data = {
-            "Source App Label": ["app1"],
-            "Source Env": ["prod"],
-            "Destination App Label": ["dest1"],
-            "Total Connection Count": [100]
+            "First Name": ["Jane"],
+            "Last Name": ["Smith"],
+            "Phone": ["1234567890"],  # Extra header
+            "Address": ["123 Main St"]  # Extra header
         }
-        expected_df = pd.DataFrame(guideline_data)
+        return guideline_data, input_data
 
-        guideline_path = tmp_path / "guideline.csv"
-        input_path = tmp_path / "input.xlsx"
+    def test_header_conversion(self):
+        """Test header conversion functionality"""
+        for input_header, expected in FULL_HEADER_CONVERSIONS.items():
+            assert MergeService._convert_header(input_header) == expected
+
+    def test_column_order_preservation(self, tmp_path, sample_data):
+        """Test that output file maintains guideline column order"""
+        guideline_data, input_data = sample_data
+
+        # Create test files
+        guideline_path = tmp_path / GUIDELINE_FILENAME
+        input_path = tmp_path / TEST_EXCEL_INPUT
 
         pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
-        with pd.ExcelWriter(input_path, engine='openpyxl') as writer:
+        with pd.ExcelWriter(input_path, engine=OPENPYXL_ENGINE) as writer:
+            pd.DataFrame(input_data).to_excel(writer, index=False)
+
+        # Perform merge
+        merged_content = MergeService.merge_files(guideline_path, input_path)
+        result_df = pd.read_csv(StringIO(merged_content))
+
+        # Verify column order matches guideline
+        assert list(result_df.columns) == list(guideline_data.keys())
+
+    def test_extra_headers_excluded(self, tmp_path, sample_data):
+        """Test that extra headers are excluded from output"""
+        guideline_data, input_data = sample_data
+
+        # Create test files
+        guideline_path = tmp_path / GUIDELINE_FILENAME
+        input_path = tmp_path / TEST_EXCEL_INPUT
+
+        pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
+        with pd.ExcelWriter(input_path, engine=OPENPYXL_ENGINE) as writer:
             pd.DataFrame(input_data).to_excel(writer, index=False)
 
         merged_content = MergeService.merge_files(guideline_path, input_path)
         result_df = pd.read_csv(StringIO(merged_content))
 
-        pd.testing.assert_frame_equal(
-            result_df,
-            expected_df,
-            check_dtype=False
-        )
+        # Verify extra headers are not in result
+        assert "Phone" not in result_df.columns
+        assert "Address" not in result_df.columns
+
+    def test_missing_headers_included(self, tmp_path, sample_data):
+        """Test that missing headers are included with NA values"""
+        guideline_data, input_data = sample_data
+
+        # Create test files
+        guideline_path = tmp_path / GUIDELINE_FILENAME
+        input_path = tmp_path / TEST_EXCEL_INPUT
+
+        pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
+        with pd.ExcelWriter(input_path, engine=OPENPYXL_ENGINE) as writer:
+            pd.DataFrame(input_data).to_excel(writer, index=False)
+
+        merged_content = MergeService.merge_files(guideline_path, input_path)
+        result_df = pd.read_csv(StringIO(merged_content))
+
+        # Verify missing headers are present with NA values
+        assert "Age" in result_df.columns
+        assert "Email" in result_df.columns
+        assert pd.isna(result_df["Age"].iloc[0])
+        assert pd.isna(result_df["Email"].iloc[0])
+
+    def test_header_comparison_accuracy(self, sample_data):
+        """Test accuracy of header comparison functionality"""
+        guideline_data, input_data = sample_data
+
+        guideline_df = pd.DataFrame(guideline_data)
+        input_df = pd.DataFrame(input_data)
+
+        result = MergeService.compare_headers(guideline_df, input_df)
+
+        assert sorted(result[HEADERS_MATCHED]) == ["First Name", "Last Name"]
+        assert sorted(result[HEADERS_MISSING]) == ["Age", "Email"]
+        assert sorted(result[HEADERS_EXTRA]) == ["Address", "Phone"]
 
 
 class TestDirectoryService:

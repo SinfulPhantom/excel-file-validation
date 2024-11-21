@@ -16,25 +16,7 @@
           </h3>
 
           <div class="row g-4">
-            <div class="col-md-4">
-              <div class="card h-100 border-0 shadow-sm">
-                <div class="card-header bg-danger bg-opacity-10 border-0">
-                  <h4 class="h6 mb-0 text-danger">Missing Headers</h4>
-                </div>
-                <div class="card-body">
-                  {% if result.missing_headers %}
-                    <ul class="list-unstyled mb-0">
-                    {% for header in result.missing_headers %}
-                      <li class="py-1"><i class="bi bi-dash-circle text-danger me-2"></i>{{ header }}</li>
-                    {% endfor %}
-                    </ul>
-                  {% else %}
-                    <p class="text-muted mb-0">No missing headers</p>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-
+            <!-- Matched Headers -->
             <div class="col-md-4">
               <div class="card h-100 border-0 shadow-sm">
                 <div class="card-header bg-success bg-opacity-10 border-0">
@@ -54,16 +36,37 @@
               </div>
             </div>
 
+            <!-- Missing Headers - Now with yellow styling -->
             <div class="col-md-4">
               <div class="card h-100 border-0 shadow-sm">
                 <div class="card-header bg-warning bg-opacity-10 border-0">
-                  <h4 class="h6 mb-0 text-warning">Extra Original Headers</h4>
+                  <h4 class="h6 mb-0 text-warning">Missing Headers to be Added</h4>
+                </div>
+                <div class="card-body">
+                  {% if result.missing_headers %}
+                    <ul class="list-unstyled mb-0">
+                    {% for header in result.missing_headers %}
+                      <li class="py-1"><i class="bi bi-plus-circle text-warning me-2"></i>{{ header }}</li>
+                    {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p class="text-muted mb-0">No missing headers</p>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Extra Headers - Now with red styling -->
+            <div class="col-md-4">
+              <div class="card h-100 border-0 shadow-sm">
+                <div class="card-header bg-danger bg-opacity-10 border-0">
+                  <h4 class="h6 mb-0 text-danger">Extra Headers to be Removed</h4>
                 </div>
                 <div class="card-body">
                   {% if result.extra_headers %}
                     <ul class="list-unstyled mb-0">
                     {% for header in result.extra_headers %}
-                      <li class="py-1"><i class="bi bi-plus-circle text-warning me-2"></i>{{ header }}</li>
+                      <li class="py-1"><i class="bi bi-dash-circle text-danger me-2"></i>{{ header }}</li>
                     {% endfor %}
                     </ul>
                   {% else %}
@@ -88,16 +91,6 @@
         <i class="bi bi-upload me-2"></i>
         Upload More Files
       </a>
-    </div>
-  </div>
-
-  <!-- Toast container for notifications -->
-  <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-    <div id="toast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
-      <div class="d-flex">
-        <div class="toast-body"></div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-      </div>
     </div>
   </div>
 </div>
