@@ -2,7 +2,7 @@ import os
 from typing import Dict
 
 # File size limits
-MAX_FILE_SIZE_MB: int = 75
+MAX_FILE_SIZE_MB: int = 100
 MAX_FILE_SIZE_BYTES: int = MAX_FILE_SIZE_MB * 1024 * 1024
 
 # Read engines
@@ -86,15 +86,15 @@ BASE_TEST_DATA_EMAIL: Dict = {
 ## Mapping
 FULL_HEADER_CONVERSIONS: Dict[str, str] = {
     # Source
-    "Source Application": "Source App Label",
+    "Source App Label": "Source Application",
     "Source Env": "Source Environment",
     "Source Enforcement": "Source Enforcement Mode",
     "Source IP Lists": "Source IPList",
     #Destination
-    "Destination Application": "Destination App Label",
+    "Destination App Label": "Destination Application",
     "Destination Env": "Destination Environment",
     "Destination Server": "Destination Name",
-    "Destination IP List": "Destination IPList",
+    "Destination IP Lists": "Destination IPList",
     "Destination Enforcement": "Destination Enforcement Mode",
     # Misc
     "Boundary Control": "Reported Enforcement Boundary",

@@ -80,10 +80,11 @@ class TestFileService:
 
 class TestMergeService:
     @pytest.mark.parametrize("input_header,expected_output", [
-        ("Source Application", "Source App Label"),
+        ("Source App Label", "Source Application"),
         ("Source IP Lists", "Source IPList"),
-        ("Destination Application", "Destination App Label"),
+        ("Destination App Label", "Destination Application"),
         ("Total Connection Count", "Num Flows"),
+        ("First Detected Date", "First Detected"),
         ("Unknown Header", "Unknown Header")  # Test non-matching header
     ])
     def test_header_conversion(self, input_header, expected_output):
@@ -91,25 +92,45 @@ class TestMergeService:
 
     @pytest.mark.parametrize("guideline_data,input_data,expected_matched,expected_missing,expected_extra", [
         (
-            {"Source App Label": ["v1"], "Destination App Label": ["v2"]},
-            {"Source Application": ["v1"], "Destination Application": ["v2"]},
-            ["Source App Label", "Destination App Label"],
+            {
+                "Source Application": ["app1"],
+                "Source IPList": ["list1"],
+                "Destination Application": ["dest1"]
+            },
+            {
+                "Source App Label": ["app1"],
+                "Source IP Lists": ["list1"],
+                "Destination App Label": ["dest1"]
+            },
+            ["Source Application", "Source IPList", "Destination Application"],
             [],
             []
         ),
         (
-            {"Source Environment": ["v1"], "Source IPList": ["v2"]},
-            {"Source Env": ["v1"], "Source IP Lists": ["v2"]},
-            ["Source Environment", "Source IPList"],
-            [],
-            []
-        ),
-        (
-            {"Num Flows": ["100"]},
-            {"Total Connection Count": ["100"], "Extra": ["data"]},
-            ["Num Flows"],
+            {
+                "Source Environment": ["prod"],
+                "Num Flows": [100]
+            },
+            {
+                "Source Env": ["prod"],
+                "Total Connection Count": [100],
+                "Extra": ["data"]
+            },
+            ["Source Environment", "Num Flows"],
             [],
             ["Extra"]
+        ),
+        (
+            {
+                "First Detected": ["2024-01-01"],
+                "Last Detected": ["2024-01-31"]
+            },
+            {
+                "First Detected Date": ["2024-01-01"]
+            },
+            ["First Detected"],
+            ["Last Detected"],
+            []
         )
     ])
     def test_header_comparisons(self, guideline_data, input_data,
@@ -125,13 +146,15 @@ class TestMergeService:
 
     def test_merge_files(self, tmp_path):
         guideline_data = {
-            "Source App Label": ["app1"],
-            "Destination App Label": ["dest1"],
+            "Source Application": ["app1"],
+            "Source Environment": ["prod"],
+            "Destination Application": ["dest1"],
             "Num Flows": [100]
         }
         input_data = {
-            "Source Application": ["app1"],
-            "Destination Application": ["dest1"],
+            "Source App Label": ["app1"],
+            "Source Env": ["prod"],
+            "Destination App Label": ["dest1"],
             "Total Connection Count": [100]
         }
         expected_df = pd.DataFrame(guideline_data)

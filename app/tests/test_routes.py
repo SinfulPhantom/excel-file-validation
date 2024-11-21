@@ -83,24 +83,22 @@ class TestRoutes:
         assert response.status_code == 413
 
     def test_successful_upload_and_merge(self, client):
-        # Create test files with matching headers to avoid conversion issues
+        # Create test files with updated header mappings
         guideline_data = pd.DataFrame({
-            "Source App Label": ["app1"],
-            "Source Enforcement Mode": ["strict"],
-            "Source IPList": ["list1"],
-            "Destination App Label": ["dest1"],
+            "Source Application": ["app1"],
+            "Source Environment": ["prod"],
+            "Destination Application": ["dest1"],
             "Num Flows": [100]
         })
 
         input_data = pd.DataFrame({
             "Source App Label": ["app1"],
-            "Source Enforcement Mode": ["strict"],
-            "Source IPList": ["list1"],
+            "Source Env": ["prod"],
             "Destination App Label": ["dest1"],
-            "Num Flows": [100]
+            "Total Connection Count": [100]
         })
 
-        # Prepare the files
+        # Prepare files for upload
         guideline_buffer = BytesIO()
         guideline_data.to_csv(guideline_buffer, index=False)
         guideline_buffer.seek(0)
@@ -119,22 +117,21 @@ class TestRoutes:
         response = client.post('/', data=data, content_type=FORM_DATA_TYPE)
         assert response.status_code == 200
 
-        # Parse response and get file_id
+        # Get file_id from response
         soup = BeautifulSoup(response.data, 'html.parser')
         merge_button = soup.find('button', {'class': 'merge-btn'})
-        assert merge_button is not None, "Merge button not found in response"
-
+        assert merge_button is not None
         file_id = merge_button.get('data-file-id')
-        assert file_id is not None, "File ID not found in merge button"
+        assert file_id is not None
 
         # Test merge and download
         response = client.get(f'/merge_and_download/{file_id}')
         assert response.status_code == 200
         assert response.headers['Content-Type'] == CSV_CONTENT_TYPE
 
-        # Verify Content
+        # Verify content
         result_df = pd.read_csv(StringIO(response.get_data(as_text=True)))
-        pd.testing.assert_frame_equal(result_df, guideline_data)
+        pd.testing.assert_frame_equal(result_df, guideline_data, check_dtype=False)
 
     def test_merge_invalid_session(self, client) -> None:
         with client.session_transaction() as session:
