@@ -77,11 +77,15 @@
             </div>
           </div>
 
-          <div class="mt-4 d-flex gap-2">
-            <button class="btn btn-primary merge-btn" data-file-id="{{ result.file_id }}" onclick="downloadFile('{{ result.file_id }}', '{{ result.filename }}')">
+          <div class="mt-4">
+            <button
+              class="btn btn-primary download-btn"
+              onclick="handleDownload('{{ result.file_id }}', '{{ result.filename }}')"
+              data-file-id="{{ result.file_id }}"
+              data-filename="{{ result.filename }}">
               <span class="spinner-border spinner-border-sm d-none me-2" role="status"></span>
               <i class="bi bi-download me-2"></i>
-              Merge and Download
+              Download New File
             </button>
           </div>
         </div>
@@ -95,6 +99,18 @@
   </div>
 </div>
 
+<!-- Toast for notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header bg-danger text-white">
+      <strong class="me-auto">Error</strong>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body"></div>
+  </div>
+</div>
+
+<!-- Required Bootstrap Icons -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css">
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 {% endblock %}

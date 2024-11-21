@@ -119,9 +119,9 @@ class TestRoutes:
 
         # Get file_id from response
         soup = BeautifulSoup(response.data, 'html.parser')
-        merge_button = soup.find('button', {'class': 'merge-btn'})
-        assert merge_button is not None
-        file_id = merge_button.get('data-file-id')
+        download_button = soup.find('button', {'class': 'download-btn'})
+        assert download_button is not None
+        file_id = download_button.get('data-file-id')
         assert file_id is not None
 
         # Test merge and download
