@@ -78,7 +78,7 @@ def upload_file() -> str:
 
     return render_template(UPLOAD_TEMPLATE)
 
-@main.route('/merge_and_download/<file_id>')
+@main.route('/merge_and_download/<file_id>', methods=['POST'])
 def merge_and_download(file_id) -> Response | tuple[str, int]:
     try:
         if SESSION_GUIDELINE_PATH not in session or SESSION_SAVED_PATH not in session:
@@ -92,13 +92,14 @@ def merge_and_download(file_id) -> Response | tuple[str, int]:
         if not input_file:
             raise BadRequest(MSG_FILE_NOT_FOUND)
 
-        guideline_path = session[SESSION_GUIDELINE_PATH]
-        input_path = input_file['path']
+        # Get custom mappings from request
+        custom_mappings = request.json.get('mappings', {})
 
-        if not os.path.exists(guideline_path) or not os.path.exists(input_path):
-            raise BadRequest(MSG_FILE_NOT_FOUND)
-
-        merged_content: str = MergeService.merge_files(guideline_path, input_path)
+        merged_content: str = MergeService.merge_files(
+            session[SESSION_GUIDELINE_PATH],
+            input_file['path'],
+            custom_mappings
+        )
 
         original_name = os.path.splitext(input_file["original_name"])[0]
         safe_filename: str = secure_filename(f"{original_name}")
@@ -112,9 +113,5 @@ def merge_and_download(file_id) -> Response | tuple[str, int]:
 
         return response
 
-    except BadRequest as e:
-        print(f"BadRequest: {str(e)}")  # Log exception message
-        return str(e), 400
     except Exception as e:
-        print(f"Exception: {str(e)}")  # Log exception message
-        return "An error occurred", 400
+        return str(e), 400

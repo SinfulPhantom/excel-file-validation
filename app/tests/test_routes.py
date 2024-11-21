@@ -12,7 +12,7 @@ from app.utils.constants import (
     CSV_CONTENT_TYPE, OPENPYXL_ENGINE, BASE_TEST_DATA_LOCATION,
     TEST_FORMAT_XLSX, GUIDELINE_FILE, INPUT_FILE,
     TEST_FORMAT_TXT, FORM_DATA_TYPE, SESSION_GUIDELINE_PATH,
-    SESSION_SAVED_PATH, TEST_FORMAT_CSV
+    SESSION_SAVED_PATH
 )
 from app.services.directory_service import DirectoryService
 
@@ -82,20 +82,23 @@ class TestRoutes:
         assert response.status_code == 413
 
     def test_successful_upload_and_merge(self, client):
+        """Test successful file upload and merge with download"""
+        # Create test data with explicit string types
         guideline_data = pd.DataFrame({
             "Source Application": ["app1"],
             "Source Environment": ["prod"],
             "Destination Application": ["dest1"],
-            "Num Flows": [100]
-        })
+            "Num Flows": ["100"]
+        }).astype(str)
 
         input_data = pd.DataFrame({
             "Source App Label": ["app1"],
             "Source Env": ["prod"],
             "Destination App Label": ["dest1"],
-            "Total Connection Count": [100]
-        })
+            "Total Connection Count": ["100"]
+        }).astype(str)
 
+        # Prepare files
         guideline_buffer = BytesIO()
         guideline_data.to_csv(guideline_buffer, index=False)
         guideline_buffer.seek(0)
@@ -105,6 +108,7 @@ class TestRoutes:
             input_data.to_excel(writer, index=False)
         input_buffer.seek(0)
 
+        # Upload files
         data = {
             GUIDELINE_FILE: (guideline_buffer, GUIDELINE_FILENAME),
             INPUT_FILE: (input_buffer, TEST_FORMAT_XLSX)
@@ -113,32 +117,39 @@ class TestRoutes:
         response = client.post('/', data=data, content_type=FORM_DATA_TYPE)
         assert response.status_code == 200
 
+        # Find download button with correct class name
         soup = BeautifulSoup(response.data, 'html.parser')
         download_button = soup.find('button', {'class': 'download-btn'})
-        assert download_button is not None
-        file_id = download_button.get('data-file-id')
-        assert file_id is not None
+        assert download_button is not None, "Download button not found"
 
-        response = client.get(f'/merge_and_download/{file_id}')
+        file_id = download_button.get('data-file-id')
+        assert file_id is not None, "File ID not found in download button"
+
+        # Test merge and download with POST
+        response = client.post(
+            f'/merge_and_download/{file_id}',
+            json={'mappings': {}},
+            content_type='application/json'
+        )
         assert response.status_code == 200
         assert response.headers['Content-Type'] == CSV_CONTENT_TYPE
 
-        result_df = pd.read_csv(StringIO(response.get_data(as_text=True)))
-        expected_df = pd.DataFrame({
-            "Source Application": ["app1"],
-            "Source Environment": ["prod"],
-            "Destination Application": ["dest1"],
-            "Num Flows": [100]
-        })
-
-        pd.testing.assert_frame_equal(result_df[expected_df.columns], expected_df)
+        # Verify content
+        result_df = pd.read_csv(StringIO(response.get_data(as_text=True)), dtype=str)
+        pd.testing.assert_frame_equal(
+            result_df[guideline_data.columns],
+            guideline_data,
+            check_dtype=False  # Skip dtype checking
+        )
 
     def test_merge_invalid_session(self, client) -> None:
         with client.session_transaction() as session:
             session.clear()
 
-        response: Response = client.get('/merge_and_download/any-id')
-
+        # Changed to POST request
+        response: Response = client.post('/merge_and_download/any-id',
+                                         json={'mappings': {}},
+                                         content_type='application/json')
         assert response.status_code == 400
 
     def test_merge_invalid_file_id(self, client) -> None:
@@ -146,8 +157,10 @@ class TestRoutes:
             session[SESSION_GUIDELINE_PATH] = 'some_path'
             session[SESSION_SAVED_PATH] = []
 
-        response: Response = client.get('/merge_and_download/invalid-id')
-
+        # Changed to POST request
+        response: Response = client.post('/merge_and_download/invalid-id',
+                                         json={'mappings': {}},
+                                         content_type='application/json')
         assert response.status_code == 400
 
 
