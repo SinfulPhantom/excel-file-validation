@@ -78,7 +78,7 @@ def upload_file() -> str:
 
     return render_template(UPLOAD_TEMPLATE)
 
-@main.route('/merge_and_download/<file_id>', methods=['POST'])
+@main.route('/merge_and_download/<file_id>', methods=['GET', 'POST'])
 def merge_and_download(file_id) -> Response | tuple[str, int]:
     try:
         if SESSION_GUIDELINE_PATH not in session or SESSION_SAVED_PATH not in session:
@@ -92,13 +92,13 @@ def merge_and_download(file_id) -> Response | tuple[str, int]:
         if not input_file:
             raise BadRequest(MSG_FILE_NOT_FOUND)
 
-        # Get custom mappings from request
-        custom_mappings = request.json.get('mappings', {})
+        # Get custom mappings from request if this is a POST
+        custom_mappings = request.json.get('mappings', {}) if request.method == 'POST' else None
 
         merged_content: str = MergeService.merge_files(
             session[SESSION_GUIDELINE_PATH],
             input_file['path'],
-            custom_mappings
+            custom_mappings=custom_mappings
         )
 
         original_name = os.path.splitext(input_file["original_name"])[0]

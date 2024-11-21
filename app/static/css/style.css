@@ -22,3 +22,56 @@
 .progress {
     height: 0.5rem;
 }
+
+.header-item {
+    cursor: grab;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.header-item:active {
+    cursor: grabbing;
+}
+
+.header-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header-item.dragging {
+    opacity: 0.6;
+    cursor: grabbing;
+}
+
+.header-item.drag-over {
+    border-color: #0d6efd !important;
+    background-color: rgba(13, 110, 253, 0.1) !important;
+}
+
+.header-item.valid-drop-target {
+    border-style: dashed !important;
+}
+
+.header-item.valid-drop-target:hover {
+    border-color: #0d6efd !important;
+    background-color: rgba(13, 110, 253, 0.05) !important;
+}
+
+/* Prevent text selection during drag */
+.header-item * {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Add visual indication that matched headers are not draggable */
+.matched-headers-list .header-item {
+    cursor: default;
+    opacity: 0.8;
+}
+
+.matched-headers-list .header-item:hover {
+    transform: none;
+    box-shadow: none;
+}
