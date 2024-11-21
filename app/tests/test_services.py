@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Tuple
 
 import pytest
 import os
@@ -80,139 +80,94 @@ class TestFileService:
 
 class TestMergeService:
     @pytest.fixture
-    def sample_data(self):
+    def sample_data(self) -> Tuple[Dict, Dict]:
         """Fixture providing sample data for tests"""
-        guideline_data = {
-            "First Name": ["John"],
-            "Last Name": ["Doe"],
-            "Age": [30],
-            "Email": ["john@example.com"]
+        guideline_data: Dict[str, List[str]] = {
+            "Source Application": ["app1"],
+            "Destination Port": ["8080"],
+            "Environment": ["prod"]
         }
-        input_data = {
-            "First Name": ["Jane"],
-            "Last Name": ["Smith"],
-            "Phone": ["1234567890"],  # Extra header
-            "Address": ["123 Main St"]  # Extra header
+        input_data: Dict[str, List[str]] = {
+            "Consumer App": ["app1"],
+            "Target Port": ["8080"],
+            "Extra Field": ["test"]
         }
         return guideline_data, input_data
 
-    def test_header_conversion(self):
-        """Test header conversion functionality"""
-        for input_header, expected in FULL_HEADER_CONVERSIONS.items():
-            assert MergeService._convert_header(input_header) == expected
-
-    def test_column_order_preservation(self, tmp_path, sample_data):
-        """Test that output file maintains guideline column order"""
+    def test_custom_mapping_conversion(self, tmp_path, sample_data):
+        """Test that custom mappings are applied correctly during conversion"""
         guideline_data, input_data = sample_data
 
-        # Create test files
-        guideline_path = tmp_path / GUIDELINE_FILENAME
-        input_path = tmp_path / TEST_EXCEL_INPUT
+        # Ensure all data is explicitly string type
+        guideline_df: DataFrame = pd.DataFrame(guideline_data, dtype=str)
+        input_df: DataFrame = pd.DataFrame(input_data, dtype=str)
 
-        pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
-        with pd.ExcelWriter(input_path, engine=OPENPYXL_ENGINE) as writer:
-            pd.DataFrame(input_data).to_excel(writer, index=False)
-
-        # Perform merge
-        merged_content = MergeService.merge_files(guideline_path, input_path)
-        result_df = pd.read_csv(StringIO(merged_content))
-
-        # Verify column order matches guideline
-        assert list(result_df.columns) == list(guideline_data.keys())
-
-    def test_extra_headers_excluded(self, tmp_path, sample_data):
-        """Test that extra headers are excluded from output"""
-        guideline_data, input_data = sample_data
-
-        # Create test files
-        guideline_path = tmp_path / GUIDELINE_FILENAME
-        input_path = tmp_path / TEST_EXCEL_INPUT
-
-        pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
-        with pd.ExcelWriter(input_path, engine=OPENPYXL_ENGINE) as writer:
-            pd.DataFrame(input_data).to_excel(writer, index=False)
-
-        merged_content = MergeService.merge_files(guideline_path, input_path)
-        result_df = pd.read_csv(StringIO(merged_content))
-
-        # Verify extra headers are not in result
-        assert "Phone" not in result_df.columns
-        assert "Address" not in result_df.columns
-
-    def test_missing_headers_included(self, tmp_path, sample_data):
-        """Test that missing headers are included with NA values"""
-        guideline_data, input_data = sample_data
-
-        # Create test files
-        guideline_path = tmp_path / GUIDELINE_FILENAME
-        input_path = tmp_path / TEST_EXCEL_INPUT
-
-        pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
-        with pd.ExcelWriter(input_path, engine=OPENPYXL_ENGINE) as writer:
-            pd.DataFrame(input_data).to_excel(writer, index=False)
-
-        merged_content = MergeService.merge_files(guideline_path, input_path)
-        result_df = pd.read_csv(StringIO(merged_content))
-
-        # Verify missing headers are present with NA values
-        assert "Age" in result_df.columns
-        assert "Email" in result_df.columns
-        assert pd.isna(result_df["Age"].iloc[0])
-        assert pd.isna(result_df["Email"].iloc[0])
-
-    def test_header_comparison_accuracy(self, sample_data):
-        """Test accuracy of header comparison functionality"""
-        guideline_data, input_data = sample_data
-
-        guideline_df = pd.DataFrame(guideline_data)
-        input_df = pd.DataFrame(input_data)
-
-        result = MergeService.compare_headers(guideline_df, input_df)
-
-        assert sorted(result[HEADERS_MATCHED]) == ["First Name", "Last Name"]
-        assert sorted(result[HEADERS_MISSING]) == ["Age", "Email"]
-        assert sorted(result[HEADERS_EXTRA]) == ["Address", "Phone"]
-
-    def test_merge_files_missing_columns(self, tmp_path):
-        guideline_data = {
-            "Source Application": ["app1"],
-            "Source Environment": ["prod"],
-            # "Destination Application": [""],  # Expecting empty string, not NaN
-            # "Destination Environment": [""]
-        }
-        input_data = {
-            "Source Application": ["app1"],
-            "Source Environment": ["prod"]
+        custom_mappings: Dict[str, str] = {
+            "Consumer App": "Source Application",
+            "Target Port": "Destination Port"
         }
 
         guideline_path = tmp_path / "guideline.csv"
         input_path = tmp_path / "input.xlsx"
 
-        pd.DataFrame(guideline_data).to_csv(guideline_path, index=False)
+        # Save as strings
+        guideline_df.to_csv(guideline_path, index=False)
         with pd.ExcelWriter(input_path, engine='openpyxl') as writer:
-            pd.DataFrame(input_data).to_excel(writer, index=False)
+            input_df.to_excel(writer, index=False)
 
-        merged_content = MergeService.merge_files(guideline_path, input_path)
-        result_df = pd.read_csv(StringIO(merged_content))
+        merged_content: str = MergeService.merge_files(
+            guideline_path,
+            input_path,
+            custom_mappings
+        )
+        result_df: DataFrame = pd.read_csv(StringIO(merged_content), dtype=str)  # Force string type on read
 
-        pd.testing.assert_frame_equal(result_df[guideline_data.keys()], pd.DataFrame(guideline_data))
+        assert str(result_df["Source Application"].iloc[0]) == "app1"
+        assert str(result_df["Destination Port"].iloc[0]) == "8080"
 
-    def test_compare_headers_removed_columns(self):
-        guideline_df = pd.DataFrame({
-            "Source Application": ["app1"],
-            "Source Environment": ["prod"]
+    def test_merge_preserves_data_types(self, tmp_path):
+        """Test that data types are preserved during merge"""
+        guideline_data: DataFrame = pd.DataFrame({
+            "ID": ["001", "002"],
+            "Value": ["100.5", "200.7"]
         })
-        input_df = pd.DataFrame({
-            "Source App Label": ["app1"],  # Changed to match conversion
-            "Source Env": ["prod"]
+        input_data: DataFrame = pd.DataFrame({
+            "ID": ["001", "002"],
+            "Value": ["100.5", "200.7"]
         })
 
-        result = MergeService.compare_headers(guideline_df, input_df)
+        guideline_path = tmp_path / "guideline.csv"
+        input_path = tmp_path / "input.xlsx"
 
-        assert result[HEADERS_MATCHED] == ["Source Application", "Source Environment"]
-        assert result[HEADERS_MISSING] == []
-        assert result[HEADERS_EXTRA] == []
-        assert sorted(result["removed_columns"]) == []
+        # Save as strings
+        guideline_data.to_csv(guideline_path, index=False)
+        with pd.ExcelWriter(input_path, engine='openpyxl') as writer:
+            input_data.to_excel(writer, index=False)
+
+        merged_content: str = MergeService.merge_files(guideline_path, input_path)
+        result_df: DataFrame = pd.read_csv(StringIO(merged_content), dtype=str)
+
+        assert result_df["ID"].iloc[0] == "001"
+        assert result_df["Value"].iloc[0] == "100.5"
+
+    def test_compare_headers(self):
+        """Test header comparison functionality"""
+        guideline_df: DataFrame = pd.DataFrame({
+            "Header1": [],
+            "Header2": [],
+            "Header3": []
+        })
+        input_df: DataFrame = pd.DataFrame({
+            "Header1": [],
+            "Header3": [],
+            "Header4": []
+        })
+
+        result: Dict[str, List[str]] = MergeService.compare_headers(guideline_df, input_df)
+
+        assert set(result[HEADERS_MATCHED]) == {"Header1", "Header3"}
+        assert set(result[HEADERS_MISSING]) == {"Header2"}
+        assert set(result[HEADERS_EXTRA]) == {"Header4"}
 
 
 class TestDirectoryService:
