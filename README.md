@@ -9,7 +9,6 @@ A Flask web application that validates and merges Excel files against a CSV guid
 - Compare headers between guideline and input files
 - Identify missing, extra, and matched headers
 - Merge and download files with standardized headers
-- Support for header mappings (e.g., "Consumer" to "Source")
 
 ## Tech Stack
 
