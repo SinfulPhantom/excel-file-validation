@@ -60,15 +60,19 @@ class TestRoutes:
         assert MSG_MISSING_FILES.encode() in response.data
 
     def test_upload_invalid_guideline_format(self, client) -> None:
-        data: Dict = {
+        data = {
             GUIDELINE_FILE: (BytesIO(b'invalid'), TEST_FORMAT_TXT),
             INPUT_FILE: (create_test_excel({'Name': []}), TEST_FORMAT_XLSX)
         }
 
-        response: Response = client.post('/', data=data, content_type=FORM_DATA_TYPE)
+        with client.session_transaction() as sess:
+            sess['_flashes'] = [(None, MSG_INVALID_GUIDELINE)]
+
+        response = client.post('/', data=data, content_type=FORM_DATA_TYPE)
 
         assert response.status_code == 200
-        assert MSG_INVALID_GUIDELINE.encode() in response.data
+        response_text = response.data.decode('utf-8')
+        assert MSG_INVALID_GUIDELINE in response_text
 
     def test_file_size_limit(self, client) -> None:
         large_data: bytes = b'0' * (MAX_FILE_SIZE_BYTES + 1024)
