@@ -57,18 +57,28 @@ function handleDrop(event, targetSource) {
       dropTarget.remove();
   }
   
+  // Determine which header is from extra and which is from missing
+  let extraHeader, missingHeader;
+  if (draggedSource === 'extra') {
+      extraHeader = draggedHeader;
+      missingHeader = targetHeader;
+  } else {
+      extraHeader = targetHeader;
+      missingHeader = draggedHeader;
+  }
+  
   // Create new matched header item
   const matchedItem = document.createElement('li');
   matchedItem.className = 'py-1 px-2 mb-2 bg-white rounded border';
   matchedItem.innerHTML = `
       <i class="bi bi-check-circle text-success me-2"></i>
       <span class="badge bg-primary me-2">New</span>
-      ${draggedHeader} → ${targetHeader}
+      ${extraHeader} → ${missingHeader}
   `;
   
-  // Store the mapping information
-  matchedItem.setAttribute('data-source-header', draggedHeader);
-  matchedItem.setAttribute('data-target-header', targetHeader);
+  // Store the mapping information (extra header -> missing header)
+  matchedItem.setAttribute('data-source-header', extraHeader);
+  matchedItem.setAttribute('data-target-header', missingHeader);
   
   // Add to matched headers
   if (matchedList.querySelector('.text-muted')) {
@@ -94,11 +104,11 @@ function handleDrop(event, targetSource) {
       matchedItem: matchedItem.cloneNode(true)
   });
   
-  // Update current mappings
+  // Update current mappings (store extra header -> missing header)
   if (!currentMappings.has(fileId)) {
       currentMappings.set(fileId, new Map());
   }
-  currentMappings.get(fileId).set(draggedHeader, targetHeader);
+  currentMappings.get(fileId).set(extraHeader, missingHeader);
   
   // Add empty state message if source list is empty
   if (!sourceList.children.length) {
@@ -203,18 +213,15 @@ function handleDownload(fileId, filename) {
   const mappings = {};
   const resultSection = button.closest('.result-section');
   const matchedHeadersList = resultSection.querySelector('.matched-headers-list');
-  const matchedHeaders = matchedHeadersList.querySelectorAll('li');
+  const matchedHeaders = matchedHeadersList.querySelectorAll('li:not(.text-muted)');
   
   matchedHeaders.forEach(header => {
-      const headerText = header.textContent.trim();
-      // Skip if it's the "No matched headers" message
-      if (headerText !== 'No matched headers') {
-          // Extract the source and target headers from the data attributes
-          const sourceHeader = header.getAttribute('data-source-header');
-          const targetHeader = header.getAttribute('data-target-header');
-          if (sourceHeader && targetHeader) {
-              mappings[sourceHeader] = targetHeader;
-          }
+      // Extract the source (extra) and target (missing) headers from the data attributes
+      const sourceHeader = header.getAttribute('data-source-header');
+      const targetHeader = header.getAttribute('data-target-header');
+      if (sourceHeader && targetHeader) {
+          // The mapping should be from extra header to missing header
+          mappings[sourceHeader] = targetHeader;
       }
   });
 
@@ -227,7 +234,9 @@ function handleDownload(fileId, filename) {
   })
       .then(response => {
           if (!response.ok) {
-              throw new Error('Download failed. Please try again.');
+              return response.text().then(text => {
+                  throw new Error(text || 'Download failed. Please try again.');
+              });
           }
           return response.blob();
       })
