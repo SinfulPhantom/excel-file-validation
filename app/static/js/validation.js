@@ -30,70 +30,83 @@ function handleDragStart(event, source) {
 
 function handleDrop(event, targetSource) {
   event.preventDefault();
-
-  if (!draggedHeader || dragSource === targetSource) {
-    return;
+  
+  const draggedHeader = event.dataTransfer.getData('text/plain');
+  const draggedSource = event.dataTransfer.getData('source');
+  const fileId = event.target.closest('.result-section').dataset.fileId;
+  
+  // Don't allow dropping on the same list
+  if (draggedSource === targetSource) return;
+  
+  // Find the lists
+  const resultSection = event.target.closest('.result-section');
+  const sourceList = resultSection.querySelector(`.${draggedSource}-headers-list`);
+  const targetList = resultSection.querySelector(`.${targetSource}-headers-list`);
+  const matchedList = resultSection.querySelector('.matched-headers-list');
+  
+  // Remove the dragged item from source list
+  const draggedItem = sourceList.querySelector(`[data-header="${draggedHeader}"]`);
+  if (!draggedItem) return;
+  draggedItem.remove();
+  
+  // Remove the target item if dropping on a specific header
+  let targetHeader = '';
+  const dropTarget = event.target.closest('.header-item');
+  if (dropTarget) {
+      targetHeader = dropTarget.dataset.header;
+      dropTarget.remove();
   }
-
-  const fileSection = event.target.closest('.result-section');
-  const fileId = fileSection.dataset.fileId;
-
-  const targetHeader = event.target.closest('.header-item')?.dataset.header;
-  if (!targetHeader) return;
-
-  // Save current state to history
-  if (!mappingHistory.has(fileId)) {
-    mappingHistory.set(fileId, []);
-  }
-  const currentState = {
-    missing: [...fileSection.querySelectorAll('.missing-headers-list .header-item')].map(el => el.dataset.header),
-    extra: [...fileSection.querySelectorAll('.extra-headers-list .header-item')].map(el => el.dataset.header),
-    matched: [...fileSection.querySelectorAll('.matched-headers-list li')]
-      .map(el => ({
-        text: el.textContent.trim(),
-        isNew: el.querySelector('.badge') !== null
-      }))
-  };
-  mappingHistory.get(fileId).push(currentState);
-
-  // Create the new mapping (Extra → Missing)
-  const extraHeader = dragSource === 'extra' ? draggedHeader : targetHeader;
-  const missingHeader = dragSource === 'extra' ? targetHeader : draggedHeader;
-
-  // Add to current mappings
-  if (!currentMappings.has(fileId)) {
-    currentMappings.set(fileId, new Map());
-  }
-  currentMappings.get(fileId).set(extraHeader, missingHeader);
-
-  // Create new matched header element
-  const matchedList = fileSection.querySelector('.matched-headers-list');
-  const newMatchedItem = document.createElement('li');
-  newMatchedItem.className = 'py-1 px-2 mb-2 bg-white rounded border';
-  newMatchedItem.innerHTML = `
-    <span class="badge bg-primary me-2">New</span>
-    <i class="bi bi-check-circle text-success me-2"></i>
-    ${extraHeader} → ${missingHeader}
+  
+  // Create new matched header item
+  const matchedItem = document.createElement('li');
+  matchedItem.className = 'py-1 px-2 mb-2 bg-white rounded border';
+  matchedItem.innerHTML = `
+      <i class="bi bi-check-circle text-success me-2"></i>
+      <span class="badge bg-primary me-2">New</span>
+      ${draggedHeader} → ${targetHeader}
   `;
-  matchedList.appendChild(newMatchedItem);
-
-  // Remove the mapped headers from their original lists
-  const draggedElement = fileSection.querySelector(`[data-header="${draggedHeader}"]`);
-  const targetElement = fileSection.querySelector(`[data-header="${targetHeader}"]`);
-  draggedElement.remove();
-  targetElement.remove();
-
-  // Show the undo button
-  fileSection.querySelector('.undo-btn').classList.remove('d-none');
-
-  // Reset drag state
-  draggedHeader = null;
-  dragSource = null;
-
-  // Remove any lingering drag-related classes
-  document.querySelectorAll('.drag-over, .valid-drop-target').forEach(el => {
-    el.classList.remove('drag-over', 'valid-drop-target');
+  
+  // Store the mapping information
+  matchedItem.setAttribute('data-source-header', draggedHeader);
+  matchedItem.setAttribute('data-target-header', targetHeader);
+  
+  // Add to matched headers
+  if (matchedList.querySelector('.text-muted')) {
+      matchedList.innerHTML = ''; // Remove "No matched headers" message
+  }
+  matchedList.appendChild(matchedItem);
+  
+  // Show undo button
+  const undoButton = resultSection.querySelector('.undo-btn');
+  if (undoButton) {
+      undoButton.classList.remove('d-none');
+  }
+  
+  // Add to mapping history
+  if (!mappingHistory.has(fileId)) {
+      mappingHistory.set(fileId, []);
+  }
+  mappingHistory.get(fileId).push({
+      sourceList: draggedSource,
+      targetList: targetSource,
+      sourceHeader: draggedHeader,
+      targetHeader: targetHeader,
+      matchedItem: matchedItem.cloneNode(true)
   });
+  
+  // Update current mappings
+  if (!currentMappings.has(fileId)) {
+      currentMappings.set(fileId, new Map());
+  }
+  currentMappings.get(fileId).set(draggedHeader, targetHeader);
+  
+  // Add empty state message if source list is empty
+  if (!sourceList.children.length) {
+      sourceList.innerHTML = '<li class="text-muted">No extra headers</li>';
+  }
+  if (!targetList.children.length) {
+      targetList.innerHTML = '<li class="text-muted">No missing headers</li>';
+  }
 }
 
 function handleDragEnd(event) {
@@ -177,45 +190,64 @@ function handleUndo(fileId) {
 }
 
 function handleDownload(fileId, filename) {
-    const button = document.querySelector(`button[data-file-id="${fileId}"]`);
-    if (!button) return;
+  const button = document.querySelector(`button[data-file-id="${fileId}"]`);
+  if (!button) return;
 
-    const spinner = button.querySelector('.spinner-border');
+  const spinner = button.querySelector('.spinner-border');
 
-    // Disable button and show spinner
-    button.disabled = true;
-    if (spinner) spinner.classList.remove('d-none');
+  // Disable button and show spinner
+  button.disabled = true;
+  if (spinner) spinner.classList.remove('d-none');
 
-    fetch(`/merge_and_download/${fileId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ mappings: {} })
-    })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Download failed. Please try again.');
-            }
-            return response.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename.replace(/\.[^/.]+$/, '.csv');
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        })
-        .catch(error => {
-            alert(error.message);
-        })
-        .finally(() => {
-            button.disabled = false;
-            if (spinner) spinner.classList.add('d-none');
-        });
+  // Get current mappings from the UI state
+  const mappings = {};
+  const resultSection = button.closest('.result-section');
+  const matchedHeadersList = resultSection.querySelector('.matched-headers-list');
+  const matchedHeaders = matchedHeadersList.querySelectorAll('li');
+  
+  matchedHeaders.forEach(header => {
+      const headerText = header.textContent.trim();
+      // Skip if it's the "No matched headers" message
+      if (headerText !== 'No matched headers') {
+          // Extract the source and target headers from the data attributes
+          const sourceHeader = header.getAttribute('data-source-header');
+          const targetHeader = header.getAttribute('data-target-header');
+          if (sourceHeader && targetHeader) {
+              mappings[sourceHeader] = targetHeader;
+          }
+      }
+  });
+
+  fetch(`/merge_and_download/${fileId}`, {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ mappings: mappings })
+  })
+      .then(response => {
+          if (!response.ok) {
+              throw new Error('Download failed. Please try again.');
+          }
+          return response.blob();
+      })
+      .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename.replace(/\.[^/.]+$/, '.csv');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+      })
+      .catch(error => {
+          alert(error.message);
+      })
+      .finally(() => {
+          button.disabled = false;
+          if (spinner) spinner.classList.add('d-none');
+      });
 }
 
 // Initialize drag and drop event listeners
