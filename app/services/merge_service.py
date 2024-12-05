@@ -44,7 +44,7 @@ class MergeService:
         """Merge files while preserving data types from guideline."""
         # Load files with type inference
         guideline_df = pd.read_csv(guideline_path, dtype=str)
-        input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE)
+        input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE, dtype=str)  # Force string type for input
 
         # Get automatic mappings
         auto_mappings = MergeService._get_automatic_mappings(
@@ -64,19 +64,21 @@ class MergeService:
         }
         input_df = input_df.rename(columns=rename_dict)
 
-        # Create result DataFrame with guideline's dtypes
+        # Create result DataFrame with guideline columns
         result_df = pd.DataFrame(columns=guideline_df.columns)
+        
+        # Copy data from input_df to result_df, handling missing columns
         for col in guideline_df.columns:
             if col in input_df.columns:
-                # Convert column to match guideline dtype
-                result_df[col] = pd.Series(input_df[col], dtype=guideline_df[col].dtype)
+                # Convert values to string and handle NaN/None values
+                result_df[col] = input_df[col].fillna('').astype(str)
             else:
-                # Add empty column with correct dtype
-                result_df[col] = pd.Series(dtype=guideline_df[col].dtype)
+                # Add empty column
+                result_df[col] = ''
 
         # Convert to CSV while preserving leading zeros
         output = StringIO()
-        result_df.to_csv(output, index=False, float_format='%.0f')
+        result_df.to_csv(output, index=False)
         output.seek(0)
         return output.getvalue()
 
