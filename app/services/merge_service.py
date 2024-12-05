@@ -47,10 +47,6 @@ class MergeService:
             guideline_df = pd.read_csv(guideline_path, dtype=str)
             input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE, dtype=str)  # Force string type for input
 
-            print(f"Debug - Input DataFrame columns: {input_df.columns.tolist()}")
-            print(f"Debug - Guideline DataFrame columns: {guideline_df.columns.tolist()}")
-            print(f"Debug - Custom mappings: {custom_mappings}")
-
             # Get automatic mappings
             auto_mappings = MergeService._get_automatic_mappings(
                 list(input_df.columns),
@@ -62,8 +58,6 @@ class MergeService:
             if custom_mappings:
                 all_mappings.update(custom_mappings)
 
-            print(f"Debug - All mappings: {all_mappings}")
-
             # Create a new DataFrame with the guideline columns
             result_df = pd.DataFrame(columns=guideline_df.columns, index=range(len(input_df)))
 
@@ -74,11 +68,7 @@ class MergeService:
             # Copy mapped columns from input_df to result_df
             for input_col, guideline_col in all_mappings.items():
                 if input_col in input_df.columns and guideline_col in result_df.columns:
-                    print(f"Debug - Copying from {input_col} to {guideline_col}")
                     result_df[guideline_col] = input_df[input_col].fillna('').astype(str)
-
-            print(f"Debug - Result DataFrame columns: {result_df.columns.tolist()}")
-            print(f"Debug - Result DataFrame shape: {result_df.shape}")
 
             # Convert to CSV
             output = StringIO()
@@ -88,7 +78,6 @@ class MergeService:
 
         except Exception as e:
             print(f"Error in merge_files: {str(e)}")
-            print(f"Debug - Error details: {type(e).__name__}")
             raise
 
     @staticmethod
