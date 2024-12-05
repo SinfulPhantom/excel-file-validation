@@ -40,6 +40,23 @@ class MergeService:
         return mappings
 
     @staticmethod
+    def _format_date_column(date_series: pd.Series) -> list:
+        """Format a date series into a list of standardized date strings.
+        
+        Args:
+            date_series: Pandas Series containing date values
+            
+        Returns:
+            List of formatted date strings, empty strings for invalid/missing dates
+        """
+        try:
+            dates = pd.to_datetime(date_series, errors='coerce')
+            return [d.strftime('%Y-%m-%d') if pd.notna(d) else '' for d in dates]
+        except Exception as e:
+            print(f"Error formatting dates: {str(e)}")
+            return date_series.fillna('').astype(str).tolist()
+
+    @staticmethod
     def merge_files(guideline_path: str, input_path: str, custom_mappings: Dict[str, str] = None) -> str:
         """Merge files while preserving data types from guideline."""
         try:
@@ -52,8 +69,7 @@ class MergeService:
             # Read Excel with date parsing
             input_df = pd.read_excel(
                 input_path, 
-                engine=OPENPYXL_ENGINE,
-                dtype={col: str for col in date_columns}  # Treat date columns as string initially
+                engine=OPENPYXL_ENGINE
             )
 
             # Get automatic mappings
@@ -77,16 +93,15 @@ class MergeService:
             # Copy mapped columns from input_df to result_df
             for input_col, guideline_col in all_mappings.items():
                 if input_col in input_df.columns and guideline_col in result_df.columns:
-                    if input_col in date_columns:
-                        # Handle date columns specifically
-                        date_series = pd.to_datetime(input_df[input_col], errors='coerce')
-                        result_df[guideline_col] = date_series.dt.strftime('%m/%d/%Y').fillna('')
-                    else:
-                        result_df[guideline_col] = input_df[input_col].fillna('').astype(str)
+                    result_df[guideline_col] = (
+                        MergeService._format_date_column(input_df[input_col])
+                        if input_col in date_columns
+                        else input_df[input_col].fillna('').astype(str)
+                    )
 
-            # Convert to CSV
+            # Convert to CSV with specific encoding and date format
             output = StringIO()
-            result_df.to_csv(output, index=False)
+            result_df.to_csv(output, index=False, date_format='%Y-%m-%d')
             output.seek(0)
             return output.getvalue()
 
