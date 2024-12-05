@@ -47,8 +47,9 @@ class MergeService:
             guideline_df = pd.read_csv(guideline_path, dtype=str)
             input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE, dtype=str)  # Force string type for input
 
-            print(f"Debug - Input DataFrame shape: {input_df.shape}")
-            print(f"Debug - Guideline DataFrame shape: {guideline_df.shape}")
+            print(f"Debug - Input DataFrame columns: {input_df.columns.tolist()}")
+            print(f"Debug - Guideline DataFrame columns: {guideline_df.columns.tolist()}")
+            print(f"Debug - Custom mappings: {custom_mappings}")
 
             # Get automatic mappings
             auto_mappings = MergeService._get_automatic_mappings(
@@ -61,27 +62,22 @@ class MergeService:
             if custom_mappings:
                 all_mappings.update(custom_mappings)
 
-            # Apply mappings
-            rename_dict = {
-                col: mapping for col, mapping in all_mappings.items()
-                if col in input_df.columns
-            }
-            input_df = input_df.rename(columns=rename_dict)
-
-            # Get the number of rows from input DataFrame
-            num_rows = len(input_df)
-            print(f"Debug - Number of rows to create: {num_rows}")
+            print(f"Debug - All mappings: {all_mappings}")
 
             # Create a new DataFrame with the guideline columns
-            result_df = pd.DataFrame(index=range(num_rows))
+            result_df = pd.DataFrame(columns=guideline_df.columns, index=range(len(input_df)))
 
-            # Copy data from input_df and add empty columns where needed
-            for col in guideline_df.columns:
-                if col in input_df.columns:
-                    result_df[col] = input_df[col].fillna('').astype(str)
-                else:
-                    result_df[col] = [''] * num_rows
+            # Fill all columns with empty strings initially
+            for col in result_df.columns:
+                result_df[col] = ''
 
+            # Copy mapped columns from input_df to result_df
+            for input_col, guideline_col in all_mappings.items():
+                if input_col in input_df.columns and guideline_col in result_df.columns:
+                    print(f"Debug - Copying from {input_col} to {guideline_col}")
+                    result_df[guideline_col] = input_df[input_col].fillna('').astype(str)
+
+            print(f"Debug - Result DataFrame columns: {result_df.columns.tolist()}")
             print(f"Debug - Result DataFrame shape: {result_df.shape}")
 
             # Convert to CSV
