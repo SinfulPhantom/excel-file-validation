@@ -42,45 +42,54 @@ class MergeService:
     @staticmethod
     def merge_files(guideline_path: str, input_path: str, custom_mappings: Dict[str, str] = None) -> str:
         """Merge files while preserving data types from guideline."""
-        # Load files with type inference
-        guideline_df = pd.read_csv(guideline_path, dtype=str)
-        input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE, dtype=str)  # Force string type for input
+        try:
+            # Load files with type inference
+            guideline_df = pd.read_csv(guideline_path, dtype=str)
+            input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE, dtype=str)  # Force string type for input
 
-        # Get automatic mappings
-        auto_mappings = MergeService._get_automatic_mappings(
-            list(input_df.columns),
-            list(guideline_df.columns)
-        )
+            # Get automatic mappings
+            auto_mappings = MergeService._get_automatic_mappings(
+                list(input_df.columns),
+                list(guideline_df.columns)
+            )
 
-        # Combine with custom mappings if provided
-        all_mappings = {**auto_mappings}
-        if custom_mappings:
-            all_mappings.update(custom_mappings)
+            # Combine with custom mappings if provided
+            all_mappings = {**auto_mappings}
+            if custom_mappings:
+                all_mappings.update(custom_mappings)
 
-        # Apply mappings
-        rename_dict = {
-            col: mapping for col, mapping in all_mappings.items()
-            if col in input_df.columns
-        }
-        input_df = input_df.rename(columns=rename_dict)
+            # Apply mappings
+            rename_dict = {
+                col: mapping for col, mapping in all_mappings.items()
+                if col in input_df.columns
+            }
+            input_df = input_df.rename(columns=rename_dict)
 
-        # Create result DataFrame with guideline columns
-        result_df = pd.DataFrame(columns=guideline_df.columns)
-        
-        # Copy data from input_df to result_df, handling missing columns
-        for col in guideline_df.columns:
-            if col in input_df.columns:
-                # Convert values to string and handle NaN/None values
-                result_df[col] = input_df[col].fillna('').astype(str)
-            else:
-                # Add empty column
-                result_df[col] = ''
+            # Initialize an empty dictionary to store column data
+            result_data = {}
+            num_rows = len(input_df) if not input_df.empty else 0
 
-        # Convert to CSV while preserving leading zeros
-        output = StringIO()
-        result_df.to_csv(output, index=False)
-        output.seek(0)
-        return output.getvalue()
+            # Prepare data for each column
+            for col in guideline_df.columns:
+                if col in input_df.columns:
+                    # Convert values to string and handle NaN/None values
+                    result_data[col] = input_df[col].fillna('').astype(str).values
+                else:
+                    # Add empty column with same length as other columns
+                    result_data[col] = [''] * num_rows
+
+            # Create result DataFrame from the prepared data
+            result_df = pd.DataFrame(result_data)
+
+            # Convert to CSV
+            output = StringIO()
+            result_df.to_csv(output, index=False)
+            output.seek(0)
+            return output.getvalue()
+
+        except Exception as e:
+            print(f"Error in merge_files: {str(e)}")  # Debug print
+            raise
 
     @staticmethod
     def compare_headers(guideline_df: DataFrame, input_df: DataFrame) -> Dict[str, List[str]]:
