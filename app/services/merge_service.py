@@ -73,7 +73,8 @@ class MergeService:
             for col in guideline_df.columns:
                 if col in input_df.columns:
                     # Convert values to string and handle NaN/None values
-                    result_data[col] = input_df[col].fillna('').astype(str).values
+                    # Convert to list to ensure 1-dimensional data
+                    result_data[col] = input_df[col].fillna('').astype(str).tolist()
                 else:
                     # Add empty column with same length as other columns
                     result_data[col] = [''] * num_rows
