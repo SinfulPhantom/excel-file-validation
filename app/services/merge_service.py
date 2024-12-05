@@ -47,6 +47,9 @@ class MergeService:
             guideline_df = pd.read_csv(guideline_path, dtype=str)
             input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE, dtype=str)  # Force string type for input
 
+            print(f"Debug - Input DataFrame shape: {input_df.shape}")
+            print(f"Debug - Guideline DataFrame shape: {guideline_df.shape}")
+
             # Get automatic mappings
             auto_mappings = MergeService._get_automatic_mappings(
                 list(input_df.columns),
@@ -65,21 +68,21 @@ class MergeService:
             }
             input_df = input_df.rename(columns=rename_dict)
 
-            # Initialize an empty dictionary to store column data
-            result_data = {}
-            num_rows = len(input_df) if not input_df.empty else 0
+            # Get the number of rows from input DataFrame
+            num_rows = len(input_df)
+            print(f"Debug - Number of rows to create: {num_rows}")
 
-            # Prepare data for each column
+            # Create a new DataFrame with the guideline columns
+            result_df = pd.DataFrame(index=range(num_rows))
+
+            # Copy data from input_df and add empty columns where needed
             for col in guideline_df.columns:
                 if col in input_df.columns:
-                    # Convert values to string and handle NaN/None values
-                    result_data[col] = list(input_df[col].fillna('').astype(str))
+                    result_df[col] = input_df[col].fillna('').astype(str)
                 else:
-                    # Add empty column with same length as other columns
-                    result_data[col] = [''] * num_rows
+                    result_df[col] = [''] * num_rows
 
-            # Create result DataFrame from the prepared data
-            result_df = pd.DataFrame(result_data)
+            print(f"Debug - Result DataFrame shape: {result_df.shape}")
 
             # Convert to CSV
             output = StringIO()
@@ -88,7 +91,8 @@ class MergeService:
             return output.getvalue()
 
         except Exception as e:
-            print(f"Error in merge_files: {str(e)}")  # Debug print
+            print(f"Error in merge_files: {str(e)}")
+            print(f"Debug - Error details: {type(e).__name__}")
             raise
 
     @staticmethod
