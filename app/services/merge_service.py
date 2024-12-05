@@ -45,7 +45,16 @@ class MergeService:
         try:
             # Load files with type inference
             guideline_df = pd.read_csv(guideline_path, dtype=str)
-            input_df = pd.read_excel(input_path, engine=OPENPYXL_ENGINE, dtype=str)  # Force string type for input
+            
+            # Define date columns
+            date_columns = ['First Detected Date', 'Last Detected Date']
+            
+            # Read Excel with date parsing
+            input_df = pd.read_excel(
+                input_path, 
+                engine=OPENPYXL_ENGINE,
+                dtype={col: str for col in date_columns}  # Treat date columns as string initially
+            )
 
             # Get automatic mappings
             auto_mappings = MergeService._get_automatic_mappings(
@@ -68,7 +77,12 @@ class MergeService:
             # Copy mapped columns from input_df to result_df
             for input_col, guideline_col in all_mappings.items():
                 if input_col in input_df.columns and guideline_col in result_df.columns:
-                    result_df[guideline_col] = input_df[input_col].fillna('').astype(str)
+                    if input_col in date_columns:
+                        # Handle date columns specifically
+                        date_series = pd.to_datetime(input_df[input_col], errors='coerce')
+                        result_df[guideline_col] = date_series.dt.strftime('%m/%d/%Y').fillna('')
+                    else:
+                        result_df[guideline_col] = input_df[input_col].fillna('').astype(str)
 
             # Convert to CSV
             output = StringIO()
