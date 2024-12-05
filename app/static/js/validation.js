@@ -177,53 +177,45 @@ function handleUndo(fileId) {
 }
 
 function handleDownload(fileId, filename) {
-  const button = document.querySelector(`button[data-file-id="${fileId}"]`);
-  if (!button) return;
+    const button = document.querySelector(`button[data-file-id="${fileId}"]`);
+    if (!button) return;
 
-  const spinner = button.querySelector('.spinner-border');
-  const toast = new bootstrap.Toast(document.getElementById('errorToast'));
+    const spinner = button.querySelector('.spinner-border');
 
-  // Get custom mappings for this file
-  const mappings = Object.fromEntries(currentMappings.get(fileId) || []);
+    // Disable button and show spinner
+    button.disabled = true;
+    if (spinner) spinner.classList.remove('d-none');
 
-  // Disable button and show spinner
-  button.disabled = true;
-  spinner.classList.remove('d-none');
-
-  fetch(`/merge_and_download/${fileId}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ mappings })
-  })
-    .then(response => {
-      if (!response.ok) {
-        return response.text().then(errorMsg => {
-          throw new Error(errorMsg || 'Download failed. Please try again.');
+    fetch(`/merge_and_download/${fileId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mappings: {} })
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Download failed. Please try again.');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename.replace(/\.[^/.]+$/, '.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            alert(error.message);
+        })
+        .finally(() => {
+            button.disabled = false;
+            if (spinner) spinner.classList.add('d-none');
         });
-      }
-      return response.blob();
-    })
-    .then(blob => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename.replace(/\.[^/.]+$/, '.csv');
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    })
-    .catch(error => {
-      const toastBody = document.querySelector('#errorToast .toast-body');
-      toastBody.textContent = error.message;
-      toast.show();
-    })
-    .finally(() => {
-      button.disabled = false;
-      spinner.classList.add('d-none');
-    });
 }
 
 // Initialize drag and drop event listeners

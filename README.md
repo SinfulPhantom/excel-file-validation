@@ -51,8 +51,9 @@ excel-file-validation/
 1. Create a virtual environment:
 ```bash
 python -m venv venv
-source venv/bin/activate  # Unix/macOS
-venv\Scripts\activate     # Windows
+---
+source venv/bin/activate        # Unix/macOS
+source venv\Scripts\activate    # Windows
 ```
 
 2. Install dependencies:
