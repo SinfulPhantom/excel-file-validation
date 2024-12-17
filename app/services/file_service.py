@@ -36,7 +36,7 @@ class FileService:
 
     @staticmethod
     def process_guideline_file(filepath: str) -> DataFrame:
-        return pd.read_csv(filepath)
+        return pd.read_csv(filepath, low_memory=False)
 
     @staticmethod
     def process_input_file(filepath: str) -> DataFrame:
