@@ -1,5 +1,5 @@
 import os
-from typing import Dict
+from typing import Dict, List
 
 # File size limits
 MAX_FILE_SIZE_MB: int = 100
@@ -98,3 +98,19 @@ FULL_HEADER_CONVERSIONS: Dict[str, str] = {
     "First Detected Date": "First Detected",
     "Last Detected Date": "Last Detected"
 }
+
+# App Status Constants
+CSV_FORMAT: str = '*.csv'
+INPUT_DIALOG: str = 'Choose App File'
+WORKLOAD_DIALOG: str = 'Choose Workloader File'
+OUTPUT_FILE: str = 'App_Status.csv'
+NPE_ENVS: List[str] = [
+    'E-Development', 'E-DIT', 'E-PLAB', 'E-QAT', 'E-sandbox', 
+    'E-Temporary', 'E-Training', 'E-UAT', 'E-Testing', 'E-test'
+]
+PROD_ENVS: List[str] = ['E-Administrative', 'E-Production', 'E-Staging']
+BUNDLED_ENVS: Dict[str, List[str]] = {'npe': NPE_ENVS, 'prod': PROD_ENVS}
+OUTPUT_HEADERS: List[str] = [
+    'Assigned Apps', 'App Label', 'NPE FE','PROD FE','NPE Managed', 'NPE Unmanaged', 'NPE_Total',
+    'Prod Managed', 'Prod Unmanaged', 'Prod_Total'
+]

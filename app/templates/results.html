@@ -132,7 +132,7 @@
         </div>
       {% endfor %}
 
-      <a href="{{ url_for('main.upload_file') }}" class="btn btn-outline-primary">
+      <a href="{{ url_for('main.excel_validation') }}" class="btn btn-outline-primary">
         <i class="bi bi-upload me-2"></i>
         Upload More Files
       </a>
@@ -149,20 +149,16 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <h6>How it works:</h6>
-        <ol class="mb-4">
-          <li>Drag a header from the "Extra Headers" column</li>
-          <li>Drop it onto a matching header in the "Missing Headers" column</li>
-          <li>A new mapping will be created in the "Matched Headers" column</li>
-          <li>Both original headers will be removed from their lists</li>
+        <h6>How to Map Headers:</h6>
+        <ol>
+          <li>Locate headers in the "Extra Headers" column that match missing headers</li>
+          <li>Drag a header from "Extra Headers" to "Missing Headers"</li>
+          <li>The header will be mapped automatically</li>
+          <li>Use the "Undo" button if you make a mistake</li>
         </ol>
-
-        <h6>What happens next:</h6>
-        <ul class="mb-4">
-          <li>The mapping will be applied when you download the merged file</li>
-          <li>The values from the input file will be mapped to the guideline headers</li>
-          <li>You can undo any mapping using the "Undo Mapping" button</li>
-        </ul>
+        <p class="mb-0">
+          <strong>Note:</strong> Headers are case-sensitive and must match exactly.
+        </p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got it!</button>

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="text-center mb-5">File Validation Tools</h1>
+    
+    <div class="row justify-content-center">
+        <!-- Excel Validation Card -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Excel Validation</h5>
+                    <p class="card-text">Validate Excel files against predefined guidelines and check for formatting issues.</p>
+                    <a href="{{ url_for('main.excel_validation') }}" class="btn btn-primary">Go to Excel Validation</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- App Status Card -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">App Status</h5>
+                    <p class="card-text">Generate and analyze application status reports across different environments.</p>
+                    <a href="{{ url_for('main.app_status') }}" class="btn btn-primary">Go to App Status</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+            <p class="text-muted">Select a tool above to get started</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
